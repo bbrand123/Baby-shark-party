@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Baby Shark Ocean Party - Disco Mode!</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%);
+            font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            transition: filter 0.5s ease;
+        }
+        #gameCanvas.disco-mode {
+            filter: brightness(0.4) saturate(1.5);
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 5;
+        }
+        #settings-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 20;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+        }
+        #settings-toggle {
+            background: rgba(255, 255, 255, 0.25);
+            border: 3px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            font-size: 1.5rem;
+            transition: transform 0.2s, background 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        #settings-toggle:hover, #settings-toggle:focus {
+            background: rgba(255, 255, 255, 0.5);
+            transform: rotate(15deg) scale(1.1);
+            outline: none;
+        }
+        #settings-toggle[aria-expanded="true"] {
+            background: #fff;
+            color: #4facfe;
+            transform: rotate(90deg);
+        }
+        #settings-menu {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            animation: slideDown 0.2s ease-out;
+            pointer-events: auto;
+        }
+        #settings-menu.open {
+            display: flex;
+        }
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .setting-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 12px;
+            padding: 12px 20px;
+            color: white;
+            font-weight: bold;
+            font-family: inherit;
+            font-size: 1rem;
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            min-width: 160px;
+            transition: all 0.2s;
+        }
+        .setting-btn[aria-pressed="true"] {
+            background: #32CD32;
+            border-color: #32CD32;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .setting-btn[aria-pressed="false"] {
+            background: #ff4757;
+            border-color: #ff4757;
+            opacity: 0.9;
+        }
+
+    /* DISCO BUTTON STYLES */
+    #disco-button {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 25;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        border: 5px solid white;
+        border-radius: 50%;
+        width: 100px;
+        height: 100px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        font-size: 2.5rem;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.4), 0 0 20px rgba(102, 126, 234, 0.6);
+        transition: all 0.3s ease;
+        animation: discoPulse 2s ease-in-out infinite;
+    }
+
+    #disco-button:hover, #disco-button:focus {
+        transform: translateX(-50%) scale(1.1);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.5), 0 0 40px rgba(102, 126, 234, 0.8);
+        outline: 3px solid white;
+        outline-offset: 5px;
+    }
+
+    #disco-button:active {
+        transform: translateX(-50%) scale(0.95);
+    }
+
+    #disco-button.active {
+        animation: discoSpin 0.5s linear infinite, discoPulse 2s ease-in-out infinite;
+        background: linear-gradient(135deg, #f093fb 0%, #667eea 50%, #764ba2 100%);
+    }
+
+    #disco-button .disco-label {
+        font-size: 0.6rem;
+        font-weight: bold;
+        color: white;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        margin-top: 3px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    @keyframes discoPulse {
+        0%, 100% {
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4), 0 0 20px rgba(102, 126, 234, 0.6);
+        }
+        50% {
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4), 0 0 40px rgba(240, 147, 251, 0.8);
+        }
+    }
+
+    @keyframes discoSpin {
+        from { background-position: 0% 50%; }
+        to { background-position: 200% 50%; }
+    }
+
+    h1 { margin: 0; font-size: 2em; }
+    p { margin: 5px 0; font-size: 1.2em; }
+    #start-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        z-index: 100;
+        backdrop-filter: blur(5px);
+    }
+    .play-btn {
+        background: #ffdb4d;
+        border: 4px solid #fff;
+        border-radius: 50px;
+        padding: 20px 40px;
+        font-size: 2em;
+        color: #d35400;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        font-family: inherit;
+        animation: pulse 1.5s infinite;
+    }
+    .status-text {
+        font-variant-numeric: tabular-nums;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+
+    /* Screen reader only text */
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+    }
+</style>
+
+</head>
+<body>
+
+<div id="ui">
+    <h1 id="score" aria-live="polite">Treats: 0</h1>
+    <p id="next-friend" aria-live="polite">Next friend in: 5</p>
+</div>
+
+<div id="settings-container">
+    <button id="settings-toggle" type="button" aria-label="Open Settings" aria-expanded="false" aria-controls="settings-menu">
+        ⚙️
+    </button>
+    <div id="settings-menu" role="group" aria-label="Game Settings">
+        <button id="music-btn" type="button" class="setting-btn" aria-pressed="false">
+            <span>🎵 Music</span>
+            <span class="status-text">OFF</span>
+        </button>
+        <button id="voice-btn" type="button" class="setting-btn" aria-pressed="true">
+            <span>🗣️ Voice</span>
+            <span class="status-text">ON</span>
+        </button>
+    </div>
+</div>
+
+<!-- DISCO BUTTON -->
+<button id="disco-button" type="button" aria-label="Disco Party Mode - Press to make sharks dance and turn on disco lights for 5 seconds">
+    <span aria-hidden="true">🪩</span>
+    <span class="disco-label">Party!</span>
+    <span class="sr-only">Activate disco party mode</span>
+</button>
+
+<div id="start-overlay">
+    <h1>Baby Shark Party!</h1>
+    <p>Touch or click to swim!</p>
+    <br>
+    <button id="start-btn" type="button" class="play-btn">PLAY!</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+/**
+ * Baby Shark Ocean Party
+ * Version 12.0 - DISCO MODE! 🪩
+ */
+
+const CONFIG = {
+    speed: 0.08,
+    maxParticles: 100,
+    colors: {
+        baby: '#FFD700', mommy: '#FF69B4', daddy: '#1E90FF',
+        grandma: '#FFA500', grandpa: '#32CD32'
+    },
+    phrases: [
+        "Yummy!", "Good job!", "Wow!", "Tasty!", "Yay!", "Super!", "Delicious!", "Awesome!"
+    ],
+    discoPhrases: [
+        "Let's dance!", "Disco time!", "Party!", "Woo hoo!", "Dance party!", "Shake it!"
+    ],
+    speechThrottle: 1500,
+    chestSpawnMin: 10000,
+    chestSpawnMax: 25000,
+    hitRadius: 15,
+    leaderFollowDistance: 60,
+    particleBatchSize: 5,
+    screenPadding: 60,
+    uiTopPadding: 120,
+    uiRightPadding: 200,
+    discoModeDuration: 5000,
+    discoMusicSpeedMultiplier: 1.5
+};
+
+const ACCESSORIES = ['none', 'hat', 'bowtie', 'sunglasses'];
+
+// Game State
+let isPlaying = false;
+let isPaused = false;
+let sharks = [];
+let foods = [];
+let bubbles = [];
+let particles = [];
+let scenery = [];
+let creatures = [];
+let chest = null;
+let score = 0;
+let nextUnlock = 5;
+let familyIndex = 0;
+let lastSpeakTime = 0;
+let nextChestTime = 0;
+
+// Disco Mode State
+let isDiscoMode = false;
+let discoEndTime = 0;
+let discoBall = null;
+let discoLights = [];
+
+// Input & Dimensions
+let mouseX = window.innerWidth / 2;
+let mouseY = window.innerHeight / 2;
+let width = window.innerWidth;
+let height = window.innerHeight;
+
+// Audio State
+let audioCtx = null;
+let musicTimer = null;
+let musicNoteIndex = 0;
+let isMusicOn = false;
+let isVoiceOn = true;
+let isSettingsOpen = false;
+
+// Performance
+let bgGradient = null;
+let darkBgGradient = null;
+let lastFrameTime = 0;
+
+// Elements
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const nextFriendEl = document.getElementById('next-friend');
+const settingsMenu = document.getElementById('settings-menu');
+const settingsToggle = document.getElementById('settings-toggle');
+const musicBtn = document.getElementById('music-btn');
+const voiceBtn = document.getElementById('voice-btn');
+const discoBtn = document.getElementById('disco-button');
+
+const FAMILY_ORDER = [
+    { role: 'mommy', color: CONFIG.colors.mommy },
+    { role: 'daddy', color: CONFIG.colors.daddy },
+    { role: 'grandma', color: CONFIG.colors.grandma },
+    { role: 'grandpa', color: CONFIG.colors.grandpa }
+];
+
+const MELODY = [
+    { freq: 392.00, dur: 300 }, { freq: 392.00, dur: 300 }, { freq: 392.00, dur: 300 },
+    { freq: 0, dur: 300 }, { freq: 392.00, dur: 150 }, { freq: 392.00, dur: 150 },
+    { freq: 392.00, dur: 300 }, { freq: 0, dur: 300 }, { freq: 392.00, dur: 150 },
+    { freq: 392.00, dur: 150 }, { freq: 440.00, dur: 300 }, { freq: 349.23, dur: 300 },
+    { freq: 261.63, dur: 600 }, { freq: 0, dur: 600 }
+];
+
+/* --- Disco Mode Classes --- */
+
+class DiscoBall {
+    constructor() {
+        this.x = width / 2;
+        this.y = -100;
+        this.targetY = 80;
+        this.size = 40;
+        this.rotation = 0;
+        this.isDropping = true;
+    }
+
+    update() {
+        if (this.isDropping && this.y < this.targetY) {
+            this.y += 5;
+            if (this.y >= this.targetY) {
+                this.isDropping = false;
+            }
+        }
+        this.rotation += 0.05;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        // Disco ball body
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
+        gradient.addColorStop(0, '#ffffff');
+        gradient.addColorStop(0.5, '#cccccc');
+        gradient.addColorStop(1, '#888888');
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Mirror tiles
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 8; j++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const y = (j / 8) * this.size * 2 - this.size;
+                const x = Math.sin(angle) * this.size;
+                ctx.fillStyle = Math.random() > 0.5 ? '#ffffff' : '#cccccc';
+                ctx.fillRect(x - 3, y - 3, 6, 6);
+            }
+        }
+
+        // Hanging chain
+        ctx.restore();
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(this.x, 0);
+        ctx.lineTo(this.x, this.y - this.size);
+        ctx.stroke();
+    }
+}
+
+class DiscoLight {
+    constructor() {
+        this.x = Math.random() * width;
+        this.y = Math.random() * height;
+        this.color = this.randomDiscoColor();
+        this.radius = Math.random() * 100 + 50;
+        this.alpha = Math.random() * 0.3 + 0.2;
+        this.pulseSpeed = Math.random() * 0.05 + 0.02;
+        this.pulse = Math.random() * Math.PI * 2;
+    }
+
+    randomDiscoColor() {
+        const colors = ['#FF00FF', '#00FFFF', '#FFFF00', '#FF0000', '#00FF00', '#0000FF', '#FF69B4'];
+        return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    update() {
+        this.pulse += this.pulseSpeed;
+        this.alpha = 0.2 + Math.sin(this.pulse) * 0.2;
+
+        // Occasionally change color
+        if (Math.random() < 0.01) {
+            this.color = this.randomDiscoColor();
+        }
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+        gradient.addColorStop(0, this.color);
+        gradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(this.x - this.radius, this.y - this.radius, this.radius * 2, this.radius * 2);
+        ctx.restore();
+    }
+}
+
+/* --- Audio Engine --- */
+
+function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function ensureAudioResumed() {
+    if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+function playTone(freq, duration, type = 'sine', vol = 0.1) {
+    if (!isMusicOn || !audioCtx || freq === 0) return;
+    ensureAudioResumed();
+
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0, audioCtx.currentTime);
+        gain.gain.linearRampToValueAtTime(vol, audioCtx.currentTime + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration/1000);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration/1000 + 0.1);
+    } catch(e) { console.log('Audio Error', e); }
+}
+
+function playNextNote() {
+    if (!isMusicOn) {
+        if (musicTimer) clearTimeout(musicTimer);
+        return;
+    }
+    const note = MELODY[musicNoteIndex];
+    if (note.freq > 0) playTone(note.freq, note.dur, 'triangle', 0.05);
+
+    // Speed up music in disco mode
+    const duration = isDiscoMode ? note.dur / CONFIG.discoMusicSpeedMultiplier : note.dur;
+
+    musicNoteIndex = (musicNoteIndex + 1) % MELODY.length;
+    musicTimer = setTimeout(playNextNote, duration);
+}
+
+function playBubblePop() {
+    if (!audioCtx) return;
+    ensureAudioResumed();
+    try {
+        const t = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, t);
+        osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+        osc.start(t); osc.stop(t + 0.15);
+    } catch(e){}
+}
+
+function playDiscoSound() {
+    if (!audioCtx) return;
+    ensureAudioResumed();
+    try {
+        const t = audioCtx.currentTime;
+        const gain = audioCtx.createGain();
+        gain.connect(audioCtx.destination);
+
+        // Funky disco startup sound
+        const frequencies = [261.63, 329.63, 392.00, 523.25];
+        frequencies.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            osc.connect(gain);
+            osc.type = 'square';
+            osc.frequency.value = freq;
+            osc.start(t + i * 0.1);
+            osc.stop(t + i * 0.1 + 0.2);
+        });
+
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.8);
+    } catch(e){}
+}
+
+function playGiggle(role) {
+    if (!isVoiceOn || !audioCtx) return;
+    ensureAudioResumed();
+    try {
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        let baseFreq = 600;
+        if (role === 'baby') baseFreq = 800;
+        if (role === 'daddy' || role === 'grandpa') baseFreq = 300;
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.setValueAtTime(baseFreq + 100, now + 0.1);
+        osc.frequency.setValueAtTime(baseFreq, now + 0.2);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(0.2, now + 0.05);
+        gain.gain.linearRampToValueAtTime(0, now + 0.1);
+        gain.gain.linearRampToValueAtTime(0.2, now + 0.15);
+        gain.gain.linearRampToValueAtTime(0, now + 0.2);
+        gain.gain.linearRampToValueAtTime(0.2, now + 0.25);
+        gain.gain.linearRampToValueAtTime(0, now + 0.3);
+        osc.start(now); osc.stop(now + 0.35);
+    } catch(e){}
+}
+
+function playChestOpen() {
+    if (!audioCtx) return;
+    ensureAudioResumed();
+    try {
+        const t = audioCtx.currentTime;
+        const gain = audioCtx.createGain();
+        gain.connect(audioCtx.destination);
+        gain.gain.setValueAtTime(0.3, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 1.0);
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            osc.connect(gain); osc.type = 'sine'; osc.frequency.value = freq;
+            osc.start(t + i*0.05); osc.stop(t + i*0.05 + 0.3);
+        });
+    } catch(e){}
+}
+
+function playCharacterSound(role) {
+    if (!isVoiceOn || !audioCtx) return;
+    ensureAudioResumed();
+    try {
+        const t = audioCtx.currentTime;
+        const gain = audioCtx.createGain();
+        gain.connect(audioCtx.destination);
+
+        let osc, filter, lfo, lfoGain;
+
+        if (role === 'mommy') {
+            osc = audioCtx.createOscillator(); osc.connect(gain); osc.type = 'sine';
+            osc.frequency.setValueAtTime(600, t);
+            osc.frequency.exponentialRampToValueAtTime(900, t + 0.1);
+            osc.frequency.exponentialRampToValueAtTime(600, t + 0.2);
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+            osc.start(t); osc.stop(t + 0.35);
+        } else if (role === 'daddy') {
+            osc = audioCtx.createOscillator(); filter = audioCtx.createBiquadFilter(); osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(200, t);
+            osc.frequency.linearRampToValueAtTime(250, t + 0.2);
+            filter.type = 'lowpass'; filter.frequency.value = 500;
+            osc.connect(filter); filter.connect(gain);
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.2, t + 0.05);
+            gain.gain.linearRampToValueAtTime(0, t + 0.3);
+            osc.start(t); osc.stop(t + 0.35);
+        } else if (role === 'grandma') {
+            osc = audioCtx.createOscillator(); lfo = audioCtx.createOscillator(); lfoGain = audioCtx.createGain();
+            lfo.frequency.value = 10; lfoGain.gain.value = 20;
+            lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+            osc.connect(gain); osc.type = 'sine'; osc.frequency.setValueAtTime(500, t);
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.2, t + 0.1);
+            gain.gain.linearRampToValueAtTime(0, t + 0.5);
+            osc.start(t); lfo.start(t); osc.stop(t + 0.55); lfo.stop(t + 0.55);
+        } else if (role === 'grandpa') {
+            osc = audioCtx.createOscillator(); osc.type = 'square'; osc.frequency.setValueAtTime(100, t);
+            filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 300;
+            osc.connect(filter); filter.connect(gain);
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.1);
+            gain.gain.linearRampToValueAtTime(0, t + 0.2);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.3);
+            gain.gain.linearRampToValueAtTime(0, t + 0.4);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.5);
+            gain.gain.linearRampToValueAtTime(0, t + 0.6);
+            osc.start(t); osc.stop(t + 0.7);
+        }
+    } catch(e){}
+}
+
+function playSound(type) {
+    if (!audioCtx) return;
+    ensureAudioResumed();
+    try {
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+        if (type === 'eat') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(500, now); osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
+            gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+            osc.start(now); osc.stop(now + 0.35);
+        }
+    } catch(e){}
+}
+
+function speakEncouragement(isDiscoMessage = false) {
+    if (!isVoiceOn || !window.speechSynthesis) return;
+    const now = Date.now();
+    if (now - lastSpeakTime < CONFIG.speechThrottle) return;
+    window.speechSynthesis.cancel();
+
+    const phrases = isDiscoMessage ? CONFIG.discoPhrases : CONFIG.phrases;
+    const text = phrases[Math.floor(Math.random() * phrases.length)];
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.pitch = 1.3; utterance.rate = 1.1; utterance.volume = 1.0;
+    window.speechSynthesis.speak(utterance);
+    lastSpeakTime = now;
+}
+
+/* --- UI Logic --- */
+
+function toggleSettingsMenu(e) {
+    if(e) e.stopPropagation();
+    isSettingsOpen = !isSettingsOpen;
+    isPaused = isSettingsOpen;
+    settingsToggle.setAttribute('aria-expanded', isSettingsOpen);
+    if (isSettingsOpen) {
+        settingsMenu.classList.add('open');
+        settingsToggle.innerHTML = "✖";
+    } else {
+        settingsMenu.classList.remove('open');
+        settingsToggle.innerHTML = "⚙️";
+    }
+}
+
+function toggleMusic(e) {
+    if(e) e.stopPropagation();
+    if (isMusicOn) {
+        isMusicOn = false;
+        if (musicTimer) clearTimeout(musicTimer);
+        musicBtn.setAttribute('aria-pressed', 'false');
+        musicBtn.querySelector('.status-text').innerText = "OFF";
+    } else {
+        initAudio();
+        if (musicTimer) clearTimeout(musicTimer);
+        ensureAudioResumed();
+        isMusicOn = true;
+        musicNoteIndex = 0;
+        musicBtn.setAttribute('aria-pressed', 'true');
+        musicBtn.querySelector('.status-text').innerText = "ON";
+        playNextNote();
+    }
+}
+
+function toggleVoice(e) {
+    if(e) e.stopPropagation();
+    isVoiceOn = !isVoiceOn;
+    voiceBtn.setAttribute('aria-pressed', isVoiceOn);
+    voiceBtn.querySelector('.status-text').innerText = isVoiceOn ? "ON" : "OFF";
+    if (isVoiceOn) {
+        const test = new SpeechSynthesisUtterance("Voice On!");
+        test.pitch = 1.3;
+        window.speechSynthesis.speak(test);
+    }
+}
+
+function activateDiscoMode(e) {
+    if(e) e.stopPropagation();
+    if (isDiscoMode) return; // Already in disco mode
+
+    isDiscoMode = true;
+    discoEndTime = Date.now() + CONFIG.discoModeDuration;
+
+    // Visual feedback
+    canvas.classList.add('disco-mode');
+    discoBtn.classList.add('active');
+    discoBtn.setAttribute('aria-label', 'Disco Party Mode Active - Dancing for 5 seconds!');
+
+    // Create disco ball
+    discoBall = new DiscoBall();
+
+    // Create disco lights
+    discoLights = [];
+    for (let i = 0; i < 6; i++) {
+        discoLights.push(new DiscoLight());
+    }
+
+    // Play disco sound
+    playDiscoSound();
+    speakEncouragement(true);
+
+    // Make all sharks spin
+    sharks.forEach(shark => {
+        shark.startDiscoSpin();
+    });
+
+    // Restart music with faster tempo
+    if (isMusicOn && musicTimer) {
+        clearTimeout(musicTimer);
+        playNextNote();
+    }
+
+    // Create celebration particles
+    for (let i = 0; i < 50; i++) {
+        const x = Math.random() * width;
+        const y = Math.random() * height;
+        const color = ['#FF00FF', '#00FFFF', '#FFFF00', '#FF69B4'][Math.floor(Math.random() * 4)];
+        particles.push(new Particle(x, y, color));
+    }
+
+    // End disco mode after duration
+    setTimeout(() => {
+        endDiscoMode();
+    }, CONFIG.discoModeDuration);
+}
+
+function endDiscoMode() {
+    isDiscoMode = false;
+    canvas.classList.remove('disco-mode');
+    discoBtn.classList.remove('active');
+    discoBtn.setAttribute('aria-label', 'Disco Party Mode - Press to make sharks dance and turn on disco lights for 5 seconds');
+
+    discoBall = null;
+    discoLights = [];
+
+    // Stop sharks from spinning
+    sharks.forEach(shark => {
+        shark.stopDiscoSpin();
+    });
+
+    // Reset music tempo
+    if (isMusicOn && musicTimer) {
+        clearTimeout(musicTimer);
+        playNextNote();
+    }
+}
+
+/* --- Entities --- */
+
+class Scenery {
+    constructor(type, depth) {
+        this.type = type;
+        this.depth = depth;
+        this.x = Math.random() * width;
+        if (type === 'ship') {
+            this.size = 150;
+            this.x = Math.random() * (width - 200) + 100;
+            this.color = '#2F4F4F';
+            this.yOffset = 40;
+        } else if (type === 'seaweed') {
+            this.size = Math.random() * 30 + 30;
+            this.color = '#2E8B57';
+            this.yOffset = 0;
+        } else { // coral
+            this.size = Math.random() * 30 + 30;
+            this.color = '#FF7F50';
+            this.yOffset = 0;
+        }
+        this.wobble = Math.random() * Math.PI * 2;
+    }
+
+    draw(ctx, time, camX) {
+        let shift = (camX - width/2) * this.depth * 0.1;
+        let drawY = height - this.yOffset;
+
+        ctx.save();
+        ctx.translate(this.x - shift, drawY);
+
+        if (this.type === 'seaweed') {
+            this.wobble += 0.02;
+            let sway = Math.sin(this.wobble) * 20;
+            ctx.strokeStyle = this.color;
+            ctx.lineWidth = 10;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.quadraticCurveTo(sway, -this.size, sway * 1.5, -this.size * 2);
+            ctx.stroke();
+        } else if (this.type === 'coral') {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.size, Math.PI, 0);
+            ctx.arc(15, -10, this.size/2, Math.PI, 0);
+            ctx.arc(-15, -5, this.size/1.5, Math.PI, 0);
+            ctx.fill();
+        } else if (this.type === 'ship') {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.moveTo(-this.size, 0);
+            ctx.quadraticCurveTo(0, 20, this.size, 0);
+            ctx.lineTo(this.size * 0.8, -this.size * 0.4);
+            ctx.lineTo(0, -this.size * 0.3);
+            ctx.lineTo(-this.size * 0.8, -this.size * 0.2);
+            ctx.fill();
+            ctx.fillRect(-10, -this.size * 0.8, 10, this.size * 0.6);
+        }
+        ctx.restore();
+    }
+}
+
+class BackgroundCreature {
+    constructor(type) {
+        this.type = type;
+        this.reset();
+    }
+
+    reset() {
+        if (this.type === 'turtle') {
+            this.x = Math.random() * width;
+            this.y = Math.random() * (height - 200) + 100;
+            this.speed = Math.random() * 0.5 + 0.3;
+            this.dir = Math.random() > 0.5 ? 1 : -1;
+            this.wobble = 0;
+        } else if (this.type === 'jellyfish') {
+            this.x = Math.random() * width;
+            this.y = height + 50;
+            this.speed = Math.random() * 0.5 + 0.3;
+            this.wobble = Math.random() * Math.PI * 2;
+        } else if (this.type === 'crab') {
+            this.x = Math.random() * width;
+            this.y = height - 20;
+            this.speed = Math.random() * 0.5 + 0.2;
+            this.dir = Math.random() > 0.5 ? 1 : -1;
+            this.wobble = 0;
+        }
+    }
+
+    update() {
+        if (this.type === 'turtle') {
+            this.x += this.speed * this.dir;
+            this.wobble += 0.05;
+            if (this.x > width + 100) this.x = -100;
+            if (this.x < -100) this.x = width + 100;
+            this.y = Math.min(this.y, height - 50);
+        } else if (this.type === 'jellyfish') {
+            this.y -= this.speed;
+            this.wobble += 0.05;
+            this.x += Math.sin(this.wobble) * 0.5;
+            if (this.y < -50) {
+                this.y = height + 50;
+                this.x = Math.random() * width;
+            }
+        } else if (this.type === 'crab') {
+            this.x += this.speed * this.dir;
+            this.wobble += 0.2;
+            if (this.x > width - 20 || this.x < 20) this.dir *= -1;
+            this.y = height - 20;
+        }
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        if (this.type === 'turtle') {
+            ctx.scale(this.dir, 1);
+            ctx.rotate(Math.sin(this.wobble) * 0.05);
+            ctx.fillStyle = '#32CD32';
+            ctx.beginPath(); ctx.arc(10, 10, 6, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-10, 10, 6, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#228B22';
+            ctx.beginPath(); ctx.arc(0, 0, 20, Math.PI, 0); ctx.lineTo(-20, 0); ctx.fill();
+            ctx.fillStyle = '#32CD32';
+            ctx.beginPath(); ctx.arc(22, -2, 8, 0, Math.PI*2); ctx.fill();
+        } else if (this.type === 'jellyfish') {
+            let scale = 1.0 + Math.sin(this.wobble) * 0.05;
+            ctx.scale(scale, scale);
+            ctx.fillStyle = 'rgba(221, 160, 221, 0.7)';
+            ctx.beginPath(); ctx.arc(0, 0, 20, Math.PI, 0); ctx.fill();
+            ctx.strokeStyle = 'rgba(221, 160, 221, 0.5)';
+            ctx.lineWidth = 3; ctx.lineCap = 'round';
+            for(let i=-10; i<=10; i+=5) {
+                ctx.beginPath(); ctx.moveTo(i, 0);
+                ctx.quadraticCurveTo(i + Math.sin(this.wobble * 2)*5, 15, i, 30);
+                ctx.stroke();
+            }
+        } else if (this.type === 'crab') {
+            ctx.translate(0, Math.abs(Math.sin(this.wobble)) * -5);
+            ctx.scale(this.dir, 1);
+            ctx.fillStyle = '#FF4500';
+            ctx.beginPath(); ctx.ellipse(0, 0, 20, 12, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'white';
+            ctx.beginPath(); ctx.arc(8, -12, 4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-8, -12, 4, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.beginPath(); ctx.arc(8, -12, 2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(-8, -12, 2, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#FF4500'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(10, -5); ctx.lineTo(25, -15); ctx.stroke();
+            ctx.beginPath(); ctx.arc(28, -18, 5, 0, Math.PI*2); ctx.fillStyle='#FF4500'; ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-10, -5); ctx.lineTo(-25, -15); ctx.stroke();
+            ctx.beginPath(); ctx.arc(-28, -18, 5, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+    }
+}
+
+class Shark {
+    constructor(role, color, followTarget) {
+        this.role = role; this.color = color;
+        this.x = width / 2; this.y = height / 2;
+        this.size = role === 'baby' ? 40 : (role.includes('grand') ? 55 : 50);
+        this.angle = 0; this.followTarget = followTarget;
+        this.wobble = Math.random() * Math.PI * 2;
+        this.isSpinning = false; this.spinAngle = 0;
+        this.isDiscoSpinning = false;
+        this.discoSpinSpeed = 0.15;
+
+        this.accessory = Math.random() < 0.5
+            ? ACCESSORIES[Math.floor(Math.random() * (ACCESSORIES.length - 1)) + 1]
+            : 'none';
+    }
+
+    triggerGiggle() {
+        if (this.isSpinning) return;
+        this.isSpinning = true; this.spinAngle = 0;
+        playGiggle(this.role);
+        for(let i=0; i<8; i++) particles.push(new Particle(this.x, this.y, this.color));
+    }
+
+    startDiscoSpin() {
+        this.isDiscoSpinning = true;
+        this.spinAngle = 0;
+    }
+
+    stopDiscoSpin() {
+        this.isDiscoSpinning = false;
+        this.spinAngle = 0;
+    }
+
+    update(targetX, targetY) {
+        let dx, dy;
+        this.wobble += 0.05;
+
+        if (this.isSpinning) {
+            this.spinAngle += 0.3;
+            if (this.spinAngle >= Math.PI * 2) {
+                this.spinAngle = 0;
+                this.isSpinning = false;
+            }
+        }
+
+        if (this.isDiscoSpinning) {
+            this.spinAngle += this.discoSpinSpeed;
+            if (this.spinAngle >= Math.PI * 2) {
+                this.spinAngle = 0;
+            }
+        }
+
+        if (this.followTarget) {
+            dx = this.followTarget.x - this.x;
+            dy = this.followTarget.y - this.y;
+            let dist = Math.hypot(dx, dy);
+            if (dist > CONFIG.leaderFollowDistance) {
+                this.x += dx * CONFIG.speed;
+                this.y += dy * CONFIG.speed;
+            }
+        } else {
+            dx = targetX - this.x;
+            dy = targetY - this.y;
+            this.x += dx * CONFIG.speed;
+            this.y += dy * CONFIG.speed;
+        }
+
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+            this.angle = Math.atan2(dy, dx);
+        }
+
+        const padding = CONFIG.screenPadding;
+        this.x = Math.max(padding, Math.min(width - padding, this.x));
+        this.y = Math.max(padding, Math.min(height - padding, this.y));
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y + Math.sin(this.wobble) * 2);
+
+        if (this.isSpinning || this.isDiscoSpinning) {
+            ctx.rotate(this.spinAngle);
+        }
+
+        if (Math.abs(this.angle) > 1.57) {
+            ctx.scale(1, -1);
+            ctx.rotate(this.angle);
+        } else {
+            ctx.rotate(this.angle);
+        }
+
+        ctx.fillStyle = this.color;
+        ctx.beginPath(); ctx.ellipse(0, 0, this.size, this.size / 1.8, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-this.size + 10, 0); ctx.lineTo(-this.size - 20, -20); ctx.lineTo(-this.size - 20, 20); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-10, -15); ctx.lineTo(10, -15); ctx.lineTo(-5, -40); ctx.fill();
+
+        if (this.accessory === 'hat') {
+            ctx.fillStyle = '#FF4500';
+            ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(10, -15); ctx.lineTo(5, -35); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(5, -35, 3, 0, Math.PI*2); ctx.fill();
+        }
+
+        ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(15, -10, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(17, -10, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'black'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(15, 5, 8, 0, Math.PI/1.5); ctx.stroke();
+
+        if (this.accessory === 'sunglasses') {
+            ctx.fillStyle = 'black';
+            ctx.beginPath(); ctx.ellipse(12, -10, 6, 4, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(18, -10, 6, 4, 0, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = 'black'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(15,-10); ctx.lineTo(10,-10); ctx.stroke();
+        }
+
+        if (this.accessory === 'bowtie') {
+            ctx.fillStyle = '#800080';
+            ctx.save();
+            ctx.translate(5, 10);
+            ctx.rotate(0.2);
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-5, -5); ctx.lineTo(-5, 5); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(5, -5); ctx.lineTo(5, 5); ctx.fill();
+            ctx.restore();
+        }
+
+        if (this.role.includes('grand')) {
+            ctx.beginPath(); ctx.arc(15, -10, 10, 0, Math.PI * 2); ctx.moveTo(5, -10); ctx.lineTo(-5, -10); ctx.stroke();
+        }
+        if (this.role === 'grandma') {
+            ctx.fillStyle = 'white'; for(let i=0; i<3; i++) { ctx.beginPath(); ctx.arc(-5 + (i*5), 15, 3, 0, Math.PI*2); ctx.fill(); }
+        }
+        if (this.role === 'mommy') {
+            ctx.strokeStyle = 'black'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(20, -15); ctx.lineTo(25, -20); ctx.moveTo(15, -18); ctx.lineTo(15, -23); ctx.stroke();
+        }
+        ctx.restore();
+    }
+}
+
+class TreasureChest {
+    constructor() {
+        this.isActive = false;
+        this.isOpen = false;
+        this.x = 0; this.y = 0; this.size = 50; this.wobble = 0;
+    }
+
+    spawn() {
+        this.isActive = true;
+        this.isOpen = false;
+        this.x = Math.random() * (width - 100) + 50;
+        this.y = height - 80;
+    }
+
+    open() {
+        if (!this.isActive || this.isOpen) return;
+        this.isOpen = true;
+        playChestOpen();
+
+        for(let i=0; i<10; i++) {
+            const f = new Food(true);
+            f.x = this.x; f.y = this.y - 20;
+            f.vx = (Math.random() - 0.5) * 15; f.vy = -(Math.random() * 15 + 5);
+            foods.push(f);
+        }
+        for(let i=0; i<20; i++) particles.push(new Particle(this.x, this.y, '#FFD700'));
+        setTimeout(() => { this.isActive = false; }, 3000);
+    }
+
+    draw(ctx, camX) {
+        if (!this.isActive) return;
+        let shift = (camX - width/2) * 0.05;
+        ctx.save();
+        ctx.translate(this.x - shift, this.y);
+
+        if (!this.isOpen) {
+            this.wobble += 0.1;
+            ctx.rotate(Math.sin(this.wobble) * 0.05);
+        }
+
+        ctx.fillStyle = '#8B4513'; ctx.fillRect(-25, -20, 50, 40);
+        ctx.fillStyle = '#A0522D';
+        if (this.isOpen) {
+            ctx.beginPath(); ctx.moveTo(-25, -20); ctx.lineTo(25, -20); ctx.lineTo(20, -50); ctx.lineTo(-20, -50); ctx.fill();
+        } else {
+            ctx.beginPath(); ctx.arc(0, -20, 25, Math.PI, 0); ctx.fill();
+        }
+        ctx.fillStyle = '#FFD700'; ctx.fillRect(-5, -15, 10, 10); ctx.fillRect(-25, -5, 50, 5);
+        ctx.restore();
+    }
+}
+
+class Food {
+    constructor(isBonus = false) {
+        this.isBonus = isBonus;
+        this.vx = 0; this.vy = 0; this.life = 1.0;
+        if (!isBonus) this.respawn();
+    }
+
+    respawn() {
+        if (this.isBonus) return;
+
+        const spawnW = width - CONFIG.screenPadding - CONFIG.uiRightPadding;
+        const spawnH = height - CONFIG.uiTopPadding - CONFIG.screenPadding - 150; // Extra padding for disco button
+
+        this.x = CONFIG.screenPadding + Math.random() * spawnW;
+        this.y = CONFIG.uiTopPadding + Math.random() * spawnH;
+
+        this.x = Math.max(20, Math.min(width - 20, this.x));
+        this.y = Math.max(20, Math.min(height - 150, this.y));
+
+        this.size = 15;
+        this.type = Math.floor(Math.random() * 3);
+        this.color = `hsl(${Math.random() * 360}, 70%, 60%)`;
+        this.floatOffset = Math.random() * 100;
+    }
+
+    update() {
+        if (this.isBonus) {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += 0.5; this.vx *= 0.95;
+            if (this.y > height - 20) { this.y = height - 20; this.vy = -this.vy * 0.5; }
+            if (this.x < 0 || this.x > width) this.vx = -this.vx;
+            this.life -= 0.001;
+        }
+    }
+
+    draw(ctx, time) {
+        ctx.save();
+        if (this.isBonus) {
+            ctx.globalAlpha = Math.max(0, Math.min(1, this.life));
+            ctx.translate(this.x, this.y);
+        } else {
+            ctx.translate(this.x, this.y + Math.sin(time / 200 + this.floatOffset) * 5);
+        }
+        ctx.fillStyle = this.color;
+        if (this.type === 0) {
+            ctx.beginPath(); ctx.ellipse(0, 0, 15, 10, 0, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(-25, -10); ctx.lineTo(-25, 10); ctx.fill();
+            ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(8, -4, 3, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(9, -4, 1, 0, Math.PI*2); ctx.fill();
+        } else if (this.type === 1) {
+            let rot = Math.PI/2*3; let x=0; let y=0; let step=Math.PI/5;
+            ctx.beginPath(); ctx.moveTo(0, -15);
+            for(let i=0;i<5;i++){ x=Math.cos(rot)*15; y=Math.sin(rot)*15; ctx.lineTo(x,y); rot+=step; x=Math.cos(rot)*7; y=Math.sin(rot)*7; ctx.lineTo(x,y); rot+=step; }
+            ctx.lineTo(0, -15); ctx.fill();
+        } else {
+            ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.arc(-4, -4, 4, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+    }
+}
+
+class Bubble {
+    constructor() { this.reset(); this.y = Math.random() * height; }
+    reset() {
+        this.x = Math.random() * width; this.y = height + 20; this.size = Math.random() * 10 + 5;
+        this.speed = Math.random() * 2 + 1; this.wobble = Math.random() * Math.PI * 2;
+    }
+    update() {
+        this.y -= this.speed; this.wobble += 0.05; this.x += Math.sin(this.wobble) * 0.5;
+        if (this.y < -20) this.reset();
+    }
+    draw(ctx) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(this.x - this.size/3, this.y - this.size/3, this.size/4, 0, Math.PI*2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.fill();
+    }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.reset(x, y, color);
+    }
+
+    reset(x, y, color) {
+        this.x = x; this.y = y; this.color = color;
+        this.size = Math.random() * 5 + 2;
+        this.vx = (Math.random() - 0.5) * 4;
+        this.vy = (Math.random() - 0.5) * 4;
+        this.life = 1.0;
+        return this;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= 0.02;
+    }
+
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+/* --- Loop --- */
+
+let resizeTimeout;
+function resize() {
+    let oldWidth = width;
+    width = window.innerWidth;
+    height = window.innerHeight;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Create gradients
+    bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+    bgGradient.addColorStop(0, '#4facfe');
+    bgGradient.addColorStop(1, '#00f2fe');
+
+    darkBgGradient = ctx.createLinearGradient(0, 0, 0, height);
+    darkBgGradient.addColorStop(0, '#1a1a2e');
+    darkBgGradient.addColorStop(1, '#16213e');
+
+    if (oldWidth > 0 && oldWidth !== width) {
+        let ratio = width / oldWidth;
+        scenery.forEach(s => s.x *= ratio);
+    }
+}
+
+function init() {
+    resize();
+    sharks.push(new Shark('baby', CONFIG.colors.baby, null));
+    for(let i=0; i<5; i++) foods.push(new Food());
+    for(let i=0; i<20; i++) bubbles.push(new Bubble());
+
+    scenery.push(new Scenery('ship', 0.2));
+    for(let i=0; i<8; i++) scenery.push(new Scenery('seaweed', 0.8));
+    for(let i=0; i<5; i++) scenery.push(new Scenery('coral', 0.6));
+    scenery.sort((a,b) => a.depth - b.depth);
+
+    creatures.push(new BackgroundCreature('turtle'));
+    creatures.push(new BackgroundCreature('jellyfish'));
+    creatures.push(new BackgroundCreature('jellyfish'));
+    creatures.push(new BackgroundCreature('crab'));
+
+    chest = new TreasureChest();
+    nextChestTime = Date.now() + Math.random() * (CONFIG.chestSpawnMax - CONFIG.chestSpawnMin) + CONFIG.chestSpawnMin;
+
+    loop();
+}
+
+function addFamilyMember() {
+    if (familyIndex < FAMILY_ORDER.length) {
+        const member = FAMILY_ORDER[familyIndex];
+        const leader = sharks[sharks.length - 1];
+        const newShark = new Shark(member.role, member.color, leader);
+        newShark.x = leader.x;
+        newShark.y = leader.y;
+        sharks.push(newShark);
+        familyIndex++;
+        playCharacterSound(member.role);
+        for(let i=0; i<20; i++) particles.push(new Particle(newShark.x, newShark.y, member.color));
+    }
+}
+
+function updateBubbles() {
+    bubbles.forEach(b => b.update());
+}
+
+function updateChest() {
+    if (!chest.isActive && Date.now() > nextChestTime) {
+        chest.spawn();
+        nextChestTime = Date.now() + Math.random() * (CONFIG.chestSpawnMax - CONFIG.chestSpawnMin) + CONFIG.chestSpawnMin;
+    }
+}
+
+function updateSharks() {
+    sharks.forEach(shark => shark.update(mouseX, mouseY));
+}
+
+function updateCreatures() {
+    creatures.forEach(c => c.update());
+}
+
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        if (particles[i].life <= 0) particles.splice(i, 1);
+    }
+    if (particles.length > CONFIG.maxParticles) {
+        particles.splice(0, particles.length - CONFIG.maxParticles);
+    }
+}
+
+function updateDiscoMode() {
+    if (isDiscoMode) {
+        // Check if disco mode should end
+        if (Date.now() >= discoEndTime) {
+            endDiscoMode();
+        }
+
+        // Update disco ball
+        if (discoBall) {
+            discoBall.update();
+        }
+
+        // Update disco lights
+        discoLights.forEach(light => light.update());
+    }
+}
+
+function updateFoodCollisions() {
+    const leader = sharks[0];
+    const hitRadiusSq = (leader.size + CONFIG.hitRadius) ** 2;
+
+    for (let i = foods.length - 1; i >= 0; i--) {
+        const food = foods[i];
+        food.update();
+
+        if (food.isBonus && food.life <= 0) {
+            foods.splice(i, 1);
+            continue;
+        }
+
+        const dx = leader.x - food.x;
+        const dy = leader.y - food.y;
+        const distSq = dx * dx + dy * dy;
+
+        if (distSq < hitRadiusSq) {
+            playSound('eat');
+            speakEncouragement();
+            for(let p=0; p<CONFIG.particleBatchSize; p++) {
+                particles.push(new Particle(food.x, food.y, food.color));
+            }
+
+            score++;
+            scoreEl.innerText = `Treats: ${score}`;
+
+            if (food.isBonus) {
+                foods.splice(i, 1);
+            } else {
+                food.respawn();
+            }
+
+            let needed = nextUnlock - score;
+            if (needed <= 0) {
+                if (familyIndex < FAMILY_ORDER.length) {
+                    addFamilyMember();
+                    nextUnlock += 5;
+                    nextFriendEl.innerText = `Next friend in: 5`;
+                } else {
+                    nextFriendEl.innerText = `Family Complete!`;
+                }
+            } else if (familyIndex < FAMILY_ORDER.length) {
+                nextFriendEl.innerText = `Next friend in: ${needed}`;
+            }
+        }
+    }
+}
+
+function update() {
+    if (!isPlaying) return;
+    updateBubbles();
+    if (isPaused) return;
+
+    updateChest();
+    updateSharks();
+    updateCreatures();
+    updateParticles();
+    updateDiscoMode();
+    updateFoodCollisions();
+}
+
+function draw() {
+    // Draw appropriate background
+    ctx.fillStyle = isDiscoMode ? darkBgGradient : bgGradient;
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw disco lights (behind everything)
+    if (isDiscoMode) {
+        discoLights.forEach(light => light.draw(ctx));
+    }
+
+    const time = Date.now();
+    scenery.forEach(s => s.draw(ctx, time, mouseX));
+    creatures.forEach(c => c.draw(ctx));
+    chest.draw(ctx, mouseX);
+    bubbles.forEach(b => b.draw(ctx));
+    foods.forEach(f => f.draw(ctx, time));
+    for (let i = sharks.length - 1; i >= 0; i--) sharks[i].draw(ctx);
+    particles.forEach(p => p.draw(ctx));
+
+    // Draw disco ball (on top of everything)
+    if (discoBall) {
+        discoBall.draw(ctx);
+    }
+}
+
+function loop(currentTime = 0) {
+    requestAnimationFrame(loop);
+    update();
+    draw();
+}
+
+/* --- Input --- */
+
+function checkTap(tx, ty) {
+    if (chest.isActive && !chest.isOpen) {
+        const dist = Math.hypot(chest.x - tx, chest.y - ty);
+        if (dist < chest.size + 20) { chest.open(); return; }
+    }
+    sharks.forEach(shark => {
+        const dist = Math.hypot(shark.x - tx, shark.y - ty);
+        if (dist < shark.size + 20) { shark.triggerGiggle(); }
+    });
+    bubbles.forEach(b => {
+        const dist = Math.hypot(b.x - tx, b.y - ty);
+        if (dist < b.size + 30) {
+            playBubblePop();
+            for(let i=0; i<3; i++) particles.push(new Particle(b.x, b.y, 'rgba(255, 255, 255, 0.7)'));
+            b.reset();
+        }
+    });
+}
+
+function handleTap(e) {
+    if (!isPlaying) return;
+    ensureAudioResumed();
+    e.preventDefault();
+    if (e.type === 'touchstart') {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            const t = e.changedTouches[i]; checkTap(t.clientX, t.clientY);
+        }
+    } else {
+        checkTap(e.clientX, e.clientY);
+    }
+}
+
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(resize, 100);
+});
+
+window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        if (isMusicOn && musicTimer) clearTimeout(musicTimer);
+        isPaused = true;
+    } else {
+        isPaused = isSettingsOpen;
+        if (isMusicOn && !musicTimer) playNextNote();
+    }
+});
+
+const handleTouchMove = (e) => {
+    e.preventDefault();
+    if(e.touches.length > 0) { mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; }
+};
+
+window.addEventListener('touchmove', handleTouchMove, { passive: false });
+canvas.addEventListener('mousedown', handleTap);
+canvas.addEventListener('touchstart', handleTap, { passive: false });
+
+document.getElementById('start-btn').addEventListener('click', () => {
+    initAudio();
+    if(window.speechSynthesis) window.speechSynthesis.speak(new SpeechSynthesisUtterance(""));
+    document.getElementById('start-overlay').style.display = 'none';
+    isPlaying = true;
+    mouseX = width / 2;
+    mouseY = height / 2;
+    nextChestTime = Date.now() + 5000;
+    ensureAudioResumed();
+});
+
+settingsToggle.addEventListener('click', toggleSettingsMenu);
+musicBtn.addEventListener('click', toggleMusic);
+voiceBtn.addEventListener('click', toggleVoice);
+
+// DISCO BUTTON EVENT LISTENERS
+discoBtn.addEventListener('click', activateDiscoMode);
+discoBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    activateDiscoMode(e);
+});
+
+// Keyboard accessibility for disco button
+discoBtn.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        activateDiscoMode(e);
+    }
+});
+
+document.addEventListener('click', (e) => {
+    if (isSettingsOpen && !settingsToggle.contains(e.target) && !settingsMenu.contains(e.target)) {
+        isSettingsOpen = false;
+        isPaused = false;
+        settingsToggle.setAttribute('aria-expanded', false);
+        settingsMenu.classList.remove('open');
+        settingsToggle.innerHTML = "⚙️";
+    }
+});
+
+init();
+</script>
+
+</body>
+</html>
