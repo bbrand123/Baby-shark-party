@@ -500,10 +500,67 @@ class DiscoLight {
     }
 }
 
-/* --- Audio Engine --- */
+/* --- Enhanced Audio Engine --- */
+
+// Audio nodes for effects
+let reverbNode = null;
+let masterGain = null;
 
 function initAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Create master gain
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0.7;
+        masterGain.connect(audioCtx.destination);
+
+        // Create reverb using convolver with impulse response
+        createReverb();
+    }
+}
+
+function createReverb() {
+    // Create a simple reverb using feedback delay network
+    const convolver = audioCtx.createConvolver();
+    const sampleRate = audioCtx.sampleRate;
+    const length = sampleRate * 1.5; // 1.5 second reverb
+    const impulse = audioCtx.createBuffer(2, length, sampleRate);
+
+    for (let channel = 0; channel < 2; channel++) {
+        const channelData = impulse.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+            // Exponential decay with some randomness for natural sound
+            channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2.5);
+        }
+    }
+
+    convolver.buffer = impulse;
+    reverbNode = audioCtx.createGain();
+    reverbNode.gain.value = 0.3;
+    convolver.connect(reverbNode);
+    reverbNode.connect(masterGain);
+
+    // Store convolver for wet signal
+    reverbNode.convolver = convolver;
+}
+
+function connectWithReverb(node, dryAmount = 0.7, wetAmount = 0.3) {
+    // Dry path
+    const dryGain = audioCtx.createGain();
+    dryGain.gain.value = dryAmount;
+    node.connect(dryGain);
+    dryGain.connect(masterGain);
+
+    // Wet path (reverb)
+    if (reverbNode && reverbNode.convolver) {
+        const wetGain = audioCtx.createGain();
+        wetGain.gain.value = wetAmount;
+        node.connect(wetGain);
+        wetGain.connect(reverbNode.convolver);
+    }
+
+    return dryGain;
 }
 
 function ensureAudioResumed() {
@@ -527,7 +584,7 @@ function playTone(freq, duration, type = 'sine', vol = 0.1) {
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration/1000);
 
         osc.connect(gain);
-        gain.connect(audioCtx.destination);
+        connectWithReverb(gain, 0.8, 0.2);
 
         osc.start();
         osc.stop(audioCtx.currentTime + duration/1000 + 0.1);
@@ -552,157 +609,578 @@ function playNextNote() {
     musicTimer = setTimeout(playNextNote, duration);
 }
 
+// Enhanced bubble pop with realistic water-like sound
 function playBubblePop() {
     if (!audioCtx) return;
     ensureAudioResumed();
     try {
         const t = audioCtx.currentTime;
+        const outputGain = audioCtx.createGain();
+        outputGain.gain.value = 0.4;
+
+        // Create noise burst for the "pop" texture
+        const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.1, audioCtx.sampleRate);
+        const noiseData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseData.length; i++) {
+            noiseData[i] = Math.random() * 2 - 1;
+        }
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = noiseBuffer;
+
+        // Bandpass filter for water-like quality
+        const noiseFilter = audioCtx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(2000, t);
+        noiseFilter.frequency.exponentialRampToValueAtTime(500, t + 0.08);
+        noiseFilter.Q.value = 2;
+
+        const noiseGain = audioCtx.createGain();
+        noiseGain.gain.setValueAtTime(0.3, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+        noise.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(outputGain);
+
+        // Tonal component - descending pitch
         const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(800, t);
-        osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
-        gain.gain.setValueAtTime(0.3, t);
-        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
-        osc.start(t); osc.stop(t + 0.15);
+        osc.frequency.setValueAtTime(1200, t);
+        osc.frequency.exponentialRampToValueAtTime(200, t + 0.12);
+
+        const oscGain = audioCtx.createGain();
+        oscGain.gain.setValueAtTime(0.25, t);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+        osc.connect(oscGain);
+        oscGain.connect(outputGain);
+
+        // Second harmonic for richness
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(1800, t);
+        osc2.frequency.exponentialRampToValueAtTime(400, t + 0.1);
+
+        const osc2Gain = audioCtx.createGain();
+        osc2Gain.gain.setValueAtTime(0.1, t);
+        osc2Gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+
+        osc2.connect(osc2Gain);
+        osc2Gain.connect(outputGain);
+
+        connectWithReverb(outputGain, 0.6, 0.4);
+
+        noise.start(t);
+        osc.start(t);
+        osc2.start(t);
+        noise.stop(t + 0.15);
+        osc.stop(t + 0.15);
+        osc2.stop(t + 0.15);
     } catch(e){}
 }
 
+// Enhanced disco sound with funky bass and synth
 function playDiscoSound() {
     if (!audioCtx) return;
     ensureAudioResumed();
     try {
         const t = audioCtx.currentTime;
-        const gain = audioCtx.createGain();
-        gain.connect(audioCtx.destination);
+        const outputGain = audioCtx.createGain();
+        outputGain.gain.value = 0.35;
 
-        // Funky disco startup sound
-        const frequencies = [261.63, 329.63, 392.00, 523.25];
-        frequencies.forEach((freq, i) => {
+        // Funky bass line
+        const bass = audioCtx.createOscillator();
+        bass.type = 'sawtooth';
+        const bassFilter = audioCtx.createBiquadFilter();
+        bassFilter.type = 'lowpass';
+        bassFilter.frequency.setValueAtTime(200, t);
+        bassFilter.frequency.linearRampToValueAtTime(800, t + 0.2);
+        bassFilter.frequency.linearRampToValueAtTime(200, t + 0.4);
+        bassFilter.Q.value = 5;
+
+        bass.frequency.setValueAtTime(110, t);
+        bass.frequency.setValueAtTime(146.83, t + 0.2);
+        bass.frequency.setValueAtTime(110, t + 0.4);
+
+        const bassGain = audioCtx.createGain();
+        bassGain.gain.setValueAtTime(0.4, t);
+        bassGain.gain.linearRampToValueAtTime(0, t + 0.6);
+
+        bass.connect(bassFilter);
+        bassFilter.connect(bassGain);
+        bassGain.connect(outputGain);
+
+        // Disco chord stabs
+        const chordFreqs = [261.63, 329.63, 392.00, 523.25];
+        chordFreqs.forEach((freq, i) => {
             const osc = audioCtx.createOscillator();
-            osc.connect(gain);
             osc.type = 'square';
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(2000, t + i * 0.08);
+            filter.frequency.exponentialRampToValueAtTime(500, t + i * 0.08 + 0.15);
+
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0, t + i * 0.08);
+            gain.gain.linearRampToValueAtTime(0.15, t + i * 0.08 + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.25);
+
             osc.frequency.value = freq;
-            osc.start(t + i * 0.1);
-            osc.stop(t + i * 0.1 + 0.2);
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(outputGain);
+
+            osc.start(t + i * 0.08);
+            osc.stop(t + i * 0.08 + 0.3);
         });
 
-        gain.gain.setValueAtTime(0.3, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.8);
+        // High sparkle
+        const sparkle = audioCtx.createOscillator();
+        sparkle.type = 'sine';
+        sparkle.frequency.setValueAtTime(1567.98, t + 0.3);
+        const sparkleGain = audioCtx.createGain();
+        sparkleGain.gain.setValueAtTime(0, t + 0.3);
+        sparkleGain.gain.linearRampToValueAtTime(0.2, t + 0.32);
+        sparkleGain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+        sparkle.connect(sparkleGain);
+        sparkleGain.connect(outputGain);
+
+        connectWithReverb(outputGain, 0.5, 0.5);
+
+        bass.start(t);
+        sparkle.start(t + 0.3);
+        bass.stop(t + 0.7);
+        sparkle.stop(t + 0.7);
     } catch(e){}
 }
 
+// Enhanced giggle with natural vibrato and warmth
 function playGiggle(role) {
     if (!isVoiceOn || !audioCtx) return;
     ensureAudioResumed();
     try {
-        const now = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
+        const t = audioCtx.currentTime;
+        const outputGain = audioCtx.createGain();
+        outputGain.gain.value = 0.3;
+
         let baseFreq = 600;
-        if (role === 'baby') baseFreq = 800;
-        if (role === 'daddy' || role === 'grandpa') baseFreq = 300;
+        let vibratoRate = 12;
+        let vibratoDepth = 30;
+
+        if (role === 'baby') {
+            baseFreq = 800;
+            vibratoRate = 15;
+            vibratoDepth = 40;
+        } else if (role === 'daddy' || role === 'grandpa') {
+            baseFreq = 280;
+            vibratoRate = 8;
+            vibratoDepth = 20;
+        }
+
+        // Main oscillator with formant-like filtering
+        const osc = audioCtx.createOscillator();
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(baseFreq, now);
-        osc.frequency.setValueAtTime(baseFreq + 100, now + 0.1);
-        osc.frequency.setValueAtTime(baseFreq, now + 0.2);
-        gain.gain.setValueAtTime(0, now);
-        gain.gain.linearRampToValueAtTime(0.2, now + 0.05);
-        gain.gain.linearRampToValueAtTime(0, now + 0.1);
-        gain.gain.linearRampToValueAtTime(0.2, now + 0.15);
-        gain.gain.linearRampToValueAtTime(0, now + 0.2);
-        gain.gain.linearRampToValueAtTime(0.2, now + 0.25);
-        gain.gain.linearRampToValueAtTime(0, now + 0.3);
-        osc.start(now); osc.stop(now + 0.35);
+
+        // Vibrato LFO
+        const vibrato = audioCtx.createOscillator();
+        vibrato.type = 'sine';
+        vibrato.frequency.value = vibratoRate;
+        const vibratoGain = audioCtx.createGain();
+        vibratoGain.gain.value = vibratoDepth;
+        vibrato.connect(vibratoGain);
+        vibratoGain.connect(osc.frequency);
+
+        osc.frequency.setValueAtTime(baseFreq, t);
+        osc.frequency.linearRampToValueAtTime(baseFreq * 1.2, t + 0.1);
+        osc.frequency.linearRampToValueAtTime(baseFreq * 0.9, t + 0.2);
+        osc.frequency.linearRampToValueAtTime(baseFreq * 1.1, t + 0.3);
+
+        // Formant filter for voice-like quality
+        const formant = audioCtx.createBiquadFilter();
+        formant.type = 'bandpass';
+        formant.frequency.value = baseFreq * 2;
+        formant.Q.value = 2;
+
+        // Amplitude envelope - bouncy giggle pattern
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.4, t + 0.03);
+        gain.gain.linearRampToValueAtTime(0.1, t + 0.08);
+        gain.gain.linearRampToValueAtTime(0.35, t + 0.12);
+        gain.gain.linearRampToValueAtTime(0.08, t + 0.18);
+        gain.gain.linearRampToValueAtTime(0.3, t + 0.23);
+        gain.gain.linearRampToValueAtTime(0, t + 0.35);
+
+        osc.connect(formant);
+        formant.connect(gain);
+        gain.connect(outputGain);
+
+        // Add a second harmonic for richness
+        const osc2 = audioCtx.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.value = baseFreq * 2;
+        const gain2 = audioCtx.createGain();
+        gain2.gain.setValueAtTime(0, t);
+        gain2.gain.linearRampToValueAtTime(0.1, t + 0.03);
+        gain2.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+        osc2.connect(gain2);
+        gain2.connect(outputGain);
+
+        connectWithReverb(outputGain, 0.7, 0.3);
+
+        vibrato.start(t);
+        osc.start(t);
+        osc2.start(t);
+        vibrato.stop(t + 0.4);
+        osc.stop(t + 0.4);
+        osc2.stop(t + 0.4);
     } catch(e){}
 }
 
+// Enhanced chest open with magical shimmer and arpeggio
 function playChestOpen() {
     if (!audioCtx) return;
     ensureAudioResumed();
     try {
         const t = audioCtx.currentTime;
-        const gain = audioCtx.createGain();
-        gain.connect(audioCtx.destination);
-        gain.gain.setValueAtTime(0.3, t);
-        gain.gain.exponentialRampToValueAtTime(0.01, t + 1.0);
-        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+        const outputGain = audioCtx.createGain();
+        outputGain.gain.value = 0.35;
+
+        // Magical arpeggio with bell-like tones
+        const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98];
+        notes.forEach((freq, i) => {
+            // Main bell tone
             const osc = audioCtx.createOscillator();
-            osc.connect(gain); osc.type = 'sine'; osc.frequency.value = freq;
-            osc.start(t + i*0.05); osc.stop(t + i*0.05 + 0.3);
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+
+            // Bell-like harmonic
+            const osc2 = audioCtx.createOscillator();
+            osc2.type = 'sine';
+            osc2.frequency.value = freq * 2.4; // Inharmonic for bell sound
+
+            const gain = audioCtx.createGain();
+            const startTime = t + i * 0.06;
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.25, startTime + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.8);
+
+            const gain2 = audioCtx.createGain();
+            gain2.gain.setValueAtTime(0, startTime);
+            gain2.gain.linearRampToValueAtTime(0.08, startTime + 0.01);
+            gain2.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+
+            osc.connect(gain);
+            osc2.connect(gain2);
+            gain.connect(outputGain);
+            gain2.connect(outputGain);
+
+            osc.start(startTime);
+            osc2.start(startTime);
+            osc.stop(startTime + 1);
+            osc2.stop(startTime + 0.5);
         });
+
+        // Shimmer effect - high frequency sparkles
+        for (let i = 0; i < 8; i++) {
+            const shimmer = audioCtx.createOscillator();
+            shimmer.type = 'sine';
+            shimmer.frequency.value = 2000 + Math.random() * 2000;
+            const shimmerGain = audioCtx.createGain();
+            const shimmerStart = t + 0.1 + Math.random() * 0.5;
+            shimmerGain.gain.setValueAtTime(0, shimmerStart);
+            shimmerGain.gain.linearRampToValueAtTime(0.05, shimmerStart + 0.01);
+            shimmerGain.gain.exponentialRampToValueAtTime(0.001, shimmerStart + 0.15);
+            shimmer.connect(shimmerGain);
+            shimmerGain.connect(outputGain);
+            shimmer.start(shimmerStart);
+            shimmer.stop(shimmerStart + 0.2);
+        }
+
+        connectWithReverb(outputGain, 0.4, 0.6);
     } catch(e){}
 }
 
+// Enhanced character sounds with unique personalities
 function playCharacterSound(role) {
     if (!isVoiceOn || !audioCtx) return;
     ensureAudioResumed();
     try {
         const t = audioCtx.currentTime;
-        const gain = audioCtx.createGain();
-        gain.connect(audioCtx.destination);
-
-        let osc, filter, lfo, lfoGain;
+        const outputGain = audioCtx.createGain();
+        outputGain.gain.value = 0.35;
 
         if (role === 'mommy') {
-            osc = audioCtx.createOscillator(); osc.connect(gain); osc.type = 'sine';
-            osc.frequency.setValueAtTime(600, t);
-            osc.frequency.exponentialRampToValueAtTime(900, t + 0.1);
-            osc.frequency.exponentialRampToValueAtTime(600, t + 0.2);
+            // Warm, nurturing sound with gentle vibrato
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+
+            const vibrato = audioCtx.createOscillator();
+            vibrato.frequency.value = 6;
+            const vGain = audioCtx.createGain();
+            vGain.gain.value = 15;
+            vibrato.connect(vGain);
+            vGain.connect(osc.frequency);
+
+            osc.frequency.setValueAtTime(550, t);
+            osc.frequency.exponentialRampToValueAtTime(750, t + 0.15);
+            osc.frequency.exponentialRampToValueAtTime(600, t + 0.35);
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 1500;
+            filter.Q.value = 1;
+
+            const gain = audioCtx.createGain();
             gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.3, t + 0.05);
-            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
-            osc.start(t); osc.stop(t + 0.35);
+            gain.gain.linearRampToValueAtTime(0.4, t + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(outputGain);
+
+            vibrato.start(t);
+            osc.start(t);
+            vibrato.stop(t + 0.45);
+            osc.stop(t + 0.45);
+
         } else if (role === 'daddy') {
-            osc = audioCtx.createOscillator(); filter = audioCtx.createBiquadFilter(); osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(200, t);
-            osc.frequency.linearRampToValueAtTime(250, t + 0.2);
-            filter.type = 'lowpass'; filter.frequency.value = 500;
-            osc.connect(filter); filter.connect(gain);
+            // Deep, strong sound with power
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(130, t);
+            osc.frequency.linearRampToValueAtTime(175, t + 0.15);
+            osc.frequency.linearRampToValueAtTime(145, t + 0.3);
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(400, t);
+            filter.frequency.linearRampToValueAtTime(800, t + 0.1);
+            filter.frequency.linearRampToValueAtTime(300, t + 0.3);
+            filter.Q.value = 3;
+
+            const gain = audioCtx.createGain();
             gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.2, t + 0.05);
-            gain.gain.linearRampToValueAtTime(0, t + 0.3);
-            osc.start(t); osc.stop(t + 0.35);
+            gain.gain.linearRampToValueAtTime(0.35, t + 0.05);
+            gain.gain.linearRampToValueAtTime(0, t + 0.35);
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(outputGain);
+
+            osc.start(t);
+            osc.stop(t + 0.4);
+
         } else if (role === 'grandma') {
-            osc = audioCtx.createOscillator(); lfo = audioCtx.createOscillator(); lfoGain = audioCtx.createGain();
-            lfo.frequency.value = 10; lfoGain.gain.value = 20;
-            lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
-            osc.connect(gain); osc.type = 'sine'; osc.frequency.setValueAtTime(500, t);
-            gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.2, t + 0.1);
-            gain.gain.linearRampToValueAtTime(0, t + 0.5);
-            osc.start(t); lfo.start(t); osc.stop(t + 0.55); lfo.stop(t + 0.55);
-        } else if (role === 'grandpa') {
-            osc = audioCtx.createOscillator(); osc.type = 'square'; osc.frequency.setValueAtTime(100, t);
-            filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 300;
-            osc.connect(filter); filter.connect(gain);
+            // Gentle, wobbly, warm sound
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+
+            const vibrato = audioCtx.createOscillator();
+            vibrato.frequency.value = 8;
+            const vGain = audioCtx.createGain();
+            vGain.gain.value = 25;
+            vibrato.connect(vGain);
+            vGain.connect(osc.frequency);
+
+            osc.frequency.setValueAtTime(480, t);
+            osc.frequency.linearRampToValueAtTime(520, t + 0.2);
+            osc.frequency.linearRampToValueAtTime(450, t + 0.5);
+
+            const gain = audioCtx.createGain();
             gain.gain.setValueAtTime(0, t);
             gain.gain.linearRampToValueAtTime(0.3, t + 0.1);
-            gain.gain.linearRampToValueAtTime(0, t + 0.2);
-            gain.gain.linearRampToValueAtTime(0.3, t + 0.3);
-            gain.gain.linearRampToValueAtTime(0, t + 0.4);
-            gain.gain.linearRampToValueAtTime(0.3, t + 0.5);
-            gain.gain.linearRampToValueAtTime(0, t + 0.6);
-            osc.start(t); osc.stop(t + 0.7);
+            gain.gain.linearRampToValueAtTime(0, t + 0.55);
+
+            osc.connect(gain);
+            gain.connect(outputGain);
+
+            vibrato.start(t);
+            osc.start(t);
+            vibrato.stop(t + 0.6);
+            osc.stop(t + 0.6);
+
+        } else if (role === 'grandpa') {
+            // Deep, grumbly, warm chuckle
+            const osc = audioCtx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(100, t);
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 400;
+
+            const gain = audioCtx.createGain();
+            // Chuckle pattern
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.4, t + 0.05);
+            gain.gain.linearRampToValueAtTime(0.1, t + 0.12);
+            gain.gain.linearRampToValueAtTime(0.35, t + 0.2);
+            gain.gain.linearRampToValueAtTime(0.08, t + 0.28);
+            gain.gain.linearRampToValueAtTime(0.3, t + 0.38);
+            gain.gain.linearRampToValueAtTime(0, t + 0.55);
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(outputGain);
+
+            osc.start(t);
+            osc.stop(t + 0.6);
         }
+
+        connectWithReverb(outputGain, 0.6, 0.4);
     } catch(e){}
 }
 
+// Enhanced eating sound - satisfying chomp with crunch
 function playSound(type) {
     if (!audioCtx) return;
     ensureAudioResumed();
     try {
-        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        const now = audioCtx.currentTime;
+        const t = audioCtx.currentTime;
         if (type === 'eat') {
-            osc.type = 'sine'; osc.frequency.setValueAtTime(500, now); osc.frequency.exponentialRampToValueAtTime(1000, now + 0.1);
-            gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-            osc.start(now); osc.stop(now + 0.35);
+            const outputGain = audioCtx.createGain();
+            outputGain.gain.value = 0.4;
+
+            // Chomp - pitch drop
+            const chomp = audioCtx.createOscillator();
+            chomp.type = 'sine';
+            chomp.frequency.setValueAtTime(600, t);
+            chomp.frequency.exponentialRampToValueAtTime(200, t + 0.08);
+
+            const chompGain = audioCtx.createGain();
+            chompGain.gain.setValueAtTime(0.4, t);
+            chompGain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+            chomp.connect(chompGain);
+            chompGain.connect(outputGain);
+
+            // Crunch noise
+            const noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.08, audioCtx.sampleRate);
+            const noiseData = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < noiseData.length; i++) {
+                noiseData[i] = Math.random() * 2 - 1;
+            }
+            const noise = audioCtx.createBufferSource();
+            noise.buffer = noiseBuffer;
+
+            const noiseFilter = audioCtx.createBiquadFilter();
+            noiseFilter.type = 'highpass';
+            noiseFilter.frequency.value = 2000;
+
+            const noiseGain = audioCtx.createGain();
+            noiseGain.gain.setValueAtTime(0.15, t);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+
+            noise.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(outputGain);
+
+            // Satisfying "pop" harmonic
+            const pop = audioCtx.createOscillator();
+            pop.type = 'sine';
+            pop.frequency.setValueAtTime(1200, t + 0.02);
+            pop.frequency.exponentialRampToValueAtTime(800, t + 0.1);
+
+            const popGain = audioCtx.createGain();
+            popGain.gain.setValueAtTime(0, t);
+            popGain.gain.linearRampToValueAtTime(0.2, t + 0.03);
+            popGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+            pop.connect(popGain);
+            popGain.connect(outputGain);
+
+            connectWithReverb(outputGain, 0.8, 0.2);
+
+            chomp.start(t);
+            noise.start(t);
+            pop.start(t);
+            chomp.stop(t + 0.15);
+            noise.stop(t + 0.1);
+            pop.stop(t + 0.2);
         }
     } catch(e){}
+}
+
+// Enhanced color matching sound - magical bell chime
+function playColorMatchingSound() {
+    if (!audioCtx) return;
+    ensureAudioResumed();
+    try {
+        const t = audioCtx.currentTime;
+        const outputGain = audioCtx.createGain();
+        outputGain.gain.value = 0.35;
+
+        // Magical ascending bells with harmonics
+        const notes = [659.25, 783.99, 987.77, 1174.66];
+        notes.forEach((freq, i) => {
+            // Main bell tone
+            const osc = audioCtx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+
+            // Bell harmonic (slightly detuned for shimmer)
+            const osc2 = audioCtx.createOscillator();
+            osc2.type = 'sine';
+            osc2.frequency.value = freq * 2.01;
+
+            // Third partial for bell-like quality
+            const osc3 = audioCtx.createOscillator();
+            osc3.type = 'sine';
+            osc3.frequency.value = freq * 3.98;
+
+            const startTime = t + i * 0.08;
+
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.25, startTime + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.6);
+
+            const gain2 = audioCtx.createGain();
+            gain2.gain.setValueAtTime(0, startTime);
+            gain2.gain.linearRampToValueAtTime(0.1, startTime + 0.01);
+            gain2.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+
+            const gain3 = audioCtx.createGain();
+            gain3.gain.setValueAtTime(0, startTime);
+            gain3.gain.linearRampToValueAtTime(0.05, startTime + 0.01);
+            gain3.gain.exponentialRampToValueAtTime(0.001, startTime + 0.15);
+
+            osc.connect(gain);
+            osc2.connect(gain2);
+            osc3.connect(gain3);
+            gain.connect(outputGain);
+            gain2.connect(outputGain);
+            gain3.connect(outputGain);
+
+            osc.start(startTime);
+            osc2.start(startTime);
+            osc3.start(startTime);
+            osc.stop(startTime + 0.7);
+            osc2.stop(startTime + 0.4);
+            osc3.stop(startTime + 0.2);
+        });
+
+        // Sparkle overlay
+        for (let i = 0; i < 5; i++) {
+            const sparkle = audioCtx.createOscillator();
+            sparkle.type = 'sine';
+            sparkle.frequency.value = 2500 + Math.random() * 1500;
+            const sparkleGain = audioCtx.createGain();
+            const sStart = t + 0.2 + Math.random() * 0.3;
+            sparkleGain.gain.setValueAtTime(0, sStart);
+            sparkleGain.gain.linearRampToValueAtTime(0.06, sStart + 0.01);
+            sparkleGain.gain.exponentialRampToValueAtTime(0.001, sStart + 0.1);
+            sparkle.connect(sparkleGain);
+            sparkleGain.connect(outputGain);
+            sparkle.start(sStart);
+            sparkle.stop(sStart + 0.15);
+        }
+
+        connectWithReverb(outputGain, 0.4, 0.6);
+    } catch(e) {}
 }
 
 function speakEncouragement(isDiscoMessage = false) {
@@ -894,29 +1372,6 @@ function endColorMatchingMode() {
     const cooldown = CONFIG.colorMatchingCooldownMin +
         Math.random() * (CONFIG.colorMatchingCooldownMax - CONFIG.colorMatchingCooldownMin);
     nextColorMatchingTime = Date.now() + cooldown;
-}
-
-function playColorMatchingSound() {
-    if (!audioCtx) return;
-    ensureAudioResumed();
-    try {
-        const t = audioCtx.currentTime;
-        const gain = audioCtx.createGain();
-        gain.connect(audioCtx.destination);
-        gain.gain.setValueAtTime(0.2, t);
-        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.6);
-
-        // Play ascending chime
-        const frequencies = [523.25, 659.25, 783.99];
-        frequencies.forEach((freq, i) => {
-            const osc = audioCtx.createOscillator();
-            osc.connect(gain);
-            osc.type = 'sine';
-            osc.frequency.value = freq;
-            osc.start(t + i * 0.1);
-            osc.stop(t + i * 0.1 + 0.2);
-        });
-    } catch(e) {}
 }
 
 function updateColorMatchingMode() {
