@@ -1374,29 +1374,6 @@ function endColorMatchingMode() {
     nextColorMatchingTime = Date.now() + cooldown;
 }
 
-function playColorMatchingSound() {
-    if (!audioCtx) return;
-    ensureAudioResumed();
-    try {
-        const t = audioCtx.currentTime;
-        const gain = audioCtx.createGain();
-        gain.connect(audioCtx.destination);
-        gain.gain.setValueAtTime(0.2, t);
-        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.6);
-
-        // Play ascending chime
-        const frequencies = [523.25, 659.25, 783.99];
-        frequencies.forEach((freq, i) => {
-            const osc = audioCtx.createOscillator();
-            osc.connect(gain);
-            osc.type = 'sine';
-            osc.frequency.value = freq;
-            osc.start(t + i * 0.1);
-            osc.stop(t + i * 0.1 + 0.2);
-        });
-    } catch(e) {}
-}
-
 function updateColorMatchingMode() {
     // Check if we should start color matching mode
     if (!isColorMatchingMode && !isDiscoMode && Date.now() >= nextColorMatchingTime) {
