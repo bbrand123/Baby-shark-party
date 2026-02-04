@@ -304,7 +304,19 @@ const CONFIG = {
     uiTopPadding: 120,
     uiRightPadding: 200,
     discoModeDuration: 5000,
-    discoMusicSpeedMultiplier: 1.5
+    discoMusicSpeedMultiplier: 1.5,
+    // Color Matching Mode
+    colorMatchingDuration: 4000,
+    colorMatchingCooldownMin: 8000,
+    colorMatchingCooldownMax: 15000,
+    colorMatchingColors: [
+        { name: 'Red', hue: 0, color: '#FF4444' },
+        { name: 'Orange', hue: 30, color: '#FF8C00' },
+        { name: 'Yellow', hue: 55, color: '#FFD700' },
+        { name: 'Green', hue: 120, color: '#32CD32' },
+        { name: 'Blue', hue: 210, color: '#1E90FF' },
+        { name: 'Purple', hue: 280, color: '#9932CC' }
+    ]
 };
 
 const ACCESSORIES = ['none', 'hat', 'bowtie', 'sunglasses'];
@@ -330,6 +342,12 @@ let isDiscoMode = false;
 let discoEndTime = 0;
 let discoBall = null;
 let discoLights = [];
+
+// Color Matching Mode State
+let isColorMatchingMode = false;
+let colorMatchingEndTime = 0;
+let nextColorMatchingTime = 0;
+let currentMatchingColor = null;
 
 // Input & Dimensions
 let mouseX = window.innerWidth / 2;
@@ -760,6 +778,11 @@ function activateDiscoMode(e) {
     if(e) e.stopPropagation();
     if (isDiscoMode) return; // Already in disco mode
 
+    // End color matching mode if active
+    if (isColorMatchingMode) {
+        endColorMatchingMode();
+    }
+
     isDiscoMode = true;
     discoEndTime = Date.now() + CONFIG.discoModeDuration;
 
@@ -822,6 +845,89 @@ function endDiscoMode() {
         clearTimeout(musicTimer);
         musicTimer = null;
         playNextNote();
+    }
+}
+
+/* --- Color Matching Mode --- */
+
+function activateColorMatchingMode() {
+    if (isColorMatchingMode || isDiscoMode) return; // Don't activate during disco mode
+
+    isColorMatchingMode = true;
+    colorMatchingEndTime = Date.now() + CONFIG.colorMatchingDuration;
+
+    // Pick a random color
+    const colors = CONFIG.colorMatchingColors;
+    currentMatchingColor = colors[Math.floor(Math.random() * colors.length)];
+
+    // Change all current food to the matching color
+    foods.forEach(food => {
+        if (!food.isBonus) {
+            food.setMatchingColor(currentMatchingColor);
+        }
+    });
+
+    // Play a chime sound
+    playColorMatchingSound();
+
+    // Create particles around Baby Shark
+    if (sharks.length > 0) {
+        const baby = sharks[0];
+        for (let i = 0; i < 15; i++) {
+            particles.push(new Particle(baby.x, baby.y, currentMatchingColor.color));
+        }
+    }
+}
+
+function endColorMatchingMode() {
+    isColorMatchingMode = false;
+    currentMatchingColor = null;
+
+    // Restore original colors to all food
+    foods.forEach(food => {
+        if (!food.isBonus) {
+            food.restoreOriginalColor();
+        }
+    });
+
+    // Schedule next color matching event
+    const cooldown = CONFIG.colorMatchingCooldownMin +
+        Math.random() * (CONFIG.colorMatchingCooldownMax - CONFIG.colorMatchingCooldownMin);
+    nextColorMatchingTime = Date.now() + cooldown;
+}
+
+function playColorMatchingSound() {
+    if (!audioCtx) return;
+    ensureAudioResumed();
+    try {
+        const t = audioCtx.currentTime;
+        const gain = audioCtx.createGain();
+        gain.connect(audioCtx.destination);
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.6);
+
+        // Play ascending chime
+        const frequencies = [523.25, 659.25, 783.99];
+        frequencies.forEach((freq, i) => {
+            const osc = audioCtx.createOscillator();
+            osc.connect(gain);
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            osc.start(t + i * 0.1);
+            osc.stop(t + i * 0.1 + 0.2);
+        });
+    } catch(e) {}
+}
+
+function updateColorMatchingMode() {
+    // Check if we should start color matching mode
+    if (!isColorMatchingMode && !isDiscoMode && Date.now() >= nextColorMatchingTime) {
+        activateColorMatchingMode();
+    }
+
+    // Check if color matching mode should end
+    if (isColorMatchingMode && Date.now() >= colorMatchingEndTime) {
+        endColorMatchingMode();
     }
 }
 
@@ -1065,6 +1171,20 @@ class Shark {
         ctx.save();
         ctx.translate(this.x, this.y + Math.sin(this.wobble) * 2);
 
+        // Draw glow effect for Baby Shark during color matching mode
+        if (this.role === 'baby' && isColorMatchingMode && currentMatchingColor) {
+            const glowPulse = 0.5 + Math.sin(Date.now() / 150) * 0.3;
+            ctx.save();
+            ctx.globalAlpha = glowPulse;
+            ctx.shadowColor = currentMatchingColor.color;
+            ctx.shadowBlur = 40;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.size + 15, 0, Math.PI * 2);
+            ctx.fillStyle = currentMatchingColor.color;
+            ctx.fill();
+            ctx.restore();
+        }
+
         if (this.isSpinning || this.isDiscoSpinning) {
             ctx.rotate(this.spinAngle);
         }
@@ -1076,7 +1196,10 @@ class Shark {
             ctx.rotate(this.angle);
         }
 
-        ctx.fillStyle = this.color;
+        // Use matching color for baby shark body during color matching mode
+        ctx.fillStyle = (this.role === 'baby' && isColorMatchingMode && currentMatchingColor)
+            ? currentMatchingColor.color
+            : this.color;
         ctx.beginPath(); ctx.ellipse(0, 0, this.size, this.size / 1.8, 0, 0, Math.PI * 2); ctx.fill();
         ctx.beginPath(); ctx.moveTo(-this.size + 10, 0); ctx.lineTo(-this.size - 20, -20); ctx.lineTo(-this.size - 20, 20); ctx.fill();
         ctx.beginPath(); ctx.moveTo(-10, -15); ctx.lineTo(10, -15); ctx.lineTo(-5, -40); ctx.fill();
@@ -1144,9 +1267,17 @@ class TreasureChest {
             const f = new Food(true);
             f.x = this.x; f.y = this.y - 20;
             f.vx = (Math.random() - 0.5) * 15; f.vy = -(Math.random() * 15 + 5);
+            // Set color for bonus food (use matching color if in color matching mode)
+            if (isColorMatchingMode && currentMatchingColor) {
+                f.color = `hsl(${currentMatchingColor.hue}, 80%, 55%)`;
+            } else {
+                f.color = `hsl(${Math.random() * 360}, 70%, 60%)`;
+            }
+            f.type = Math.floor(Math.random() * 3);
             foods.push(f);
         }
-        for(let i=0; i<20; i++) particles.push(new Particle(this.x, this.y, '#FFD700'));
+        const particleColor = (isColorMatchingMode && currentMatchingColor) ? currentMatchingColor.color : '#FFD700';
+        for(let i=0; i<20; i++) particles.push(new Particle(this.x, this.y, particleColor));
         setTimeout(() => { this.isActive = false; }, 3000);
     }
 
@@ -1177,6 +1308,8 @@ class Food {
     constructor(isBonus = false) {
         this.isBonus = isBonus;
         this.vx = 0; this.vy = 0; this.life = 1.0;
+        this.originalColor = null;
+        this.isColorMatched = false;
         if (!isBonus) this.respawn();
     }
 
@@ -1195,7 +1328,28 @@ class Food {
         this.size = 15;
         this.type = Math.floor(Math.random() * 3);
         this.color = `hsl(${Math.random() * 360}, 70%, 60%)`;
+        this.originalColor = this.color;
         this.floatOffset = Math.random() * 100;
+        this.isColorMatched = false;
+
+        // If color matching mode is active, apply the matching color
+        if (isColorMatchingMode && currentMatchingColor) {
+            this.setMatchingColor(currentMatchingColor);
+        }
+    }
+
+    setMatchingColor(matchingColor) {
+        if (matchingColor) {
+            this.color = `hsl(${matchingColor.hue}, 80%, 55%)`;
+            this.isColorMatched = true;
+        }
+    }
+
+    restoreOriginalColor() {
+        if (this.originalColor) {
+            this.color = this.originalColor;
+            this.isColorMatched = false;
+        }
     }
 
     update() {
@@ -1333,6 +1487,9 @@ function init() {
     chest = new TreasureChest();
     nextChestTime = Date.now() + Math.random() * (CONFIG.chestSpawnMax - CONFIG.chestSpawnMin) + CONFIG.chestSpawnMin;
 
+    // Initialize color matching mode timer (first occurrence after 5-10 seconds)
+    nextColorMatchingTime = Date.now() + 5000 + Math.random() * 5000;
+
     loop();
 }
 
@@ -1455,6 +1612,7 @@ function update() {
     updateCreatures();
     updateParticles();
     updateDiscoMode();
+    updateColorMatchingMode();
     updateFoodCollisions();
 }
 
