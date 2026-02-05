@@ -579,6 +579,7 @@ function createReverb() {
 }
 
 function connectWithReverb(node, dryAmount = 0.7, wetAmount = 0.3) {
+    if (!audioCtx || !masterGain) return null;
     // Dry path
     const dryGain = audioCtx.createGain();
     dryGain.gain.value = dryAmount;
@@ -2123,7 +2124,7 @@ function init() {
 }
 
 function addFamilyMember() {
-    if (familyIndex < FAMILY_ORDER.length) {
+    if (familyIndex < FAMILY_ORDER.length && sharks.length > 0) {
         const member = FAMILY_ORDER[familyIndex];
         const leader = sharks[sharks.length - 1];
         const newShark = new Shark(member.role, member.color, leader);
@@ -2185,6 +2186,7 @@ function updateDiscoMode() {
 }
 
 function updateFoodCollisions() {
+    if (sharks.length === 0) return;
     const leader = sharks[0];
     const hitRadiusSq = (leader.size + CONFIG.hitRadius) ** 2;
 
@@ -2250,15 +2252,64 @@ function updateAutopilotMode() {
         }
     }
 
-    // Update autopilot waypoint if active
+    // Update autopilot waypoint if active - now targets food intelligently
     if (isAutopilotActive && Date.now() >= nextWaypointTime) {
-        const leftPadding = CONFIG.screenPadding;
-        const rightPadding = CONFIG.uiRightPadding;
-        const topPadding = CONFIG.uiTopPadding;
-        const bottomPadding = CONFIG.screenPadding;
-        autopilotTargetX = leftPadding + Math.random() * (width - leftPadding - rightPadding);
-        autopilotTargetY = topPadding + Math.random() * (height - topPadding - bottomPadding);
-        nextWaypointTime = Date.now() + CONFIG.autopilotWaypointInterval;
+        let targetFound = false;
+
+        // Prioritize: 1) Open treasure chest, 2) Nearest food, 3) Random waypoint
+
+        // Check for active unopened treasure chest (20% chance to target it for variety)
+        if (chest && chest.isActive && !chest.isOpen && Math.random() < 0.2) {
+            autopilotTargetX = chest.x;
+            autopilotTargetY = chest.y;
+            targetFound = true;
+
+            // Auto-open chest if shark is close enough
+            if (sharks.length > 0) {
+                const leader = sharks[0];
+                const chestDist = Math.hypot(chest.x - leader.x, chest.y - leader.y);
+                if (chestDist < chest.size + 30) {
+                    chest.open();
+                }
+            }
+        }
+
+        // Find nearest food item if no chest target
+        if (!targetFound && foods.length > 0 && sharks.length > 0) {
+            const leader = sharks[0];
+            let nearestFood = null;
+            let nearestDistSq = Infinity;
+
+            for (const food of foods) {
+                const dx = food.x - leader.x;
+                const dy = food.y - leader.y;
+                const distSq = dx * dx + dy * dy;
+                if (distSq < nearestDistSq) {
+                    nearestDistSq = distSq;
+                    nearestFood = food;
+                }
+            }
+
+            if (nearestFood) {
+                // Add slight randomness to make movement more natural
+                autopilotTargetX = nearestFood.x + (Math.random() - 0.5) * 20;
+                autopilotTargetY = nearestFood.y + (Math.random() - 0.5) * 20;
+                targetFound = true;
+            }
+        }
+
+        // Fallback to random waypoint if no food available
+        if (!targetFound) {
+            const leftPadding = CONFIG.screenPadding;
+            const rightPadding = CONFIG.uiRightPadding;
+            const topPadding = CONFIG.uiTopPadding;
+            const bottomPadding = CONFIG.screenPadding;
+            autopilotTargetX = leftPadding + Math.random() * (width - leftPadding - rightPadding);
+            autopilotTargetY = topPadding + Math.random() * (height - topPadding - bottomPadding);
+        }
+
+        // Shorter interval when targeting food for more responsive gameplay
+        nextWaypointTime = Date.now() + (targetFound ? 500 : CONFIG.autopilotWaypointInterval);
     }
 }
 
