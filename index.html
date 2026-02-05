@@ -1256,6 +1256,8 @@ function toggleSettingsMenu(e) {
         settingsMenu.classList.remove('open');
         settingsToggle.innerHTML = "⚙️";
         settingsToggle.setAttribute('aria-label', 'Open Settings');
+        // Reset autopilot timer when closing settings to prevent immediate activation
+        lastInteractionTime = Date.now();
     }
 }
 
@@ -1324,10 +1326,13 @@ function toggleAutopilot(e) {
 function activateAutopilotMode() {
     if (isAutopilotActive) return;
     isAutopilotActive = true;
-    // Set initial random target within screen bounds
-    const padding = 100;
-    autopilotTargetX = padding + Math.random() * (width - padding * 2);
-    autopilotTargetY = padding + Math.random() * (height - padding * 2);
+    // Set initial random target within screen bounds, avoiding UI elements
+    const leftPadding = CONFIG.screenPadding;
+    const rightPadding = CONFIG.uiRightPadding;
+    const topPadding = CONFIG.uiTopPadding;
+    const bottomPadding = CONFIG.screenPadding;
+    autopilotTargetX = leftPadding + Math.random() * (width - leftPadding - rightPadding);
+    autopilotTargetY = topPadding + Math.random() * (height - topPadding - bottomPadding);
     nextWaypointTime = Date.now() + CONFIG.autopilotWaypointInterval;
 }
 
@@ -2076,6 +2081,16 @@ function resize() {
         let ratio = width / oldWidth;
         scenery.forEach(s => s.x *= ratio);
     }
+
+    // Clamp autopilot target to new screen bounds if active
+    if (isAutopilotActive) {
+        const leftPadding = CONFIG.screenPadding;
+        const rightPadding = CONFIG.uiRightPadding;
+        const topPadding = CONFIG.uiTopPadding;
+        const bottomPadding = CONFIG.screenPadding;
+        autopilotTargetX = Math.max(leftPadding, Math.min(autopilotTargetX, width - rightPadding));
+        autopilotTargetY = Math.max(topPadding, Math.min(autopilotTargetY, height - bottomPadding));
+    }
 }
 
 function init() {
@@ -2237,9 +2252,12 @@ function updateAutopilotMode() {
 
     // Update autopilot waypoint if active
     if (isAutopilotActive && Date.now() >= nextWaypointTime) {
-        const padding = 100;
-        autopilotTargetX = padding + Math.random() * (width - padding * 2);
-        autopilotTargetY = padding + Math.random() * (height - padding * 2);
+        const leftPadding = CONFIG.screenPadding;
+        const rightPadding = CONFIG.uiRightPadding;
+        const topPadding = CONFIG.uiTopPadding;
+        const bottomPadding = CONFIG.screenPadding;
+        autopilotTargetX = leftPadding + Math.random() * (width - leftPadding - rightPadding);
+        autopilotTargetY = topPadding + Math.random() * (height - topPadding - bottomPadding);
         nextWaypointTime = Date.now() + CONFIG.autopilotWaypointInterval;
     }
 }
@@ -2348,6 +2366,9 @@ document.addEventListener("visibilitychange", () => {
     } else {
         isPaused = isSettingsOpen;
         if (isMusicOn && !musicTimer) playNextNote();
+        // Reset autopilot timer and deactivate when returning to page
+        lastInteractionTime = Date.now();
+        if (isAutopilotActive) deactivateAutopilotMode();
     }
 });
 
@@ -2373,6 +2394,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
     mouseX = width / 2;
     mouseY = height / 2;
     nextChestTime = Date.now() + 5000;
+    lastInteractionTime = Date.now(); // Reset autopilot timer on game start
     ensureAudioResumed();
 });
 
@@ -2405,6 +2427,8 @@ document.addEventListener('click', (e) => {
         settingsMenu.classList.remove('open');
         settingsToggle.innerHTML = "⚙️";
         settingsToggle.setAttribute('aria-label', 'Open Settings');
+        // Reset autopilot timer when closing settings
+        lastInteractionTime = Date.now();
     }
 });
 
