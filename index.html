@@ -260,6 +260,10 @@
             <span>🔷 Shape Voice</span>
             <span class="status-text">ON</span>
         </button>
+        <button id="autopilot-btn" type="button" class="setting-btn" aria-pressed="false">
+            <span>🤖 Autopilot</span>
+            <span class="status-text">OFF</span>
+        </button>
     </div>
 </div>
 
@@ -328,7 +332,10 @@ const CONFIG = {
         { name: 'Circle', type: 'circle' }
     ],
     shapeMinInterval: 8000, // Minimum time between shape spawns (ms)
-    shapeMaxInterval: 15000 // Maximum time between shape spawns (ms)
+    shapeMaxInterval: 15000, // Maximum time between shape spawns (ms)
+    // Autopilot (Screensaver) Mode
+    autopilotInactivityTime: 10000, // 10 seconds before autopilot activates
+    autopilotWaypointInterval: 3000 // Change target every 3 seconds
 };
 
 const ACCESSORIES = ['none', 'hat', 'bowtie', 'sunglasses'];
@@ -365,6 +372,14 @@ let currentMatchingColor = null;
 let isShapeVoiceOn = true;
 let nextShapeSpawnTime = 0;
 
+// Autopilot (Screensaver) Mode State
+let isAutopilotEnabled = false;
+let isAutopilotActive = false;
+let lastInteractionTime = Date.now();
+let autopilotTargetX = window.innerWidth / 2;
+let autopilotTargetY = window.innerHeight / 2;
+let nextWaypointTime = 0;
+
 // Input & Dimensions
 let mouseX = window.innerWidth / 2;
 let mouseY = window.innerHeight / 2;
@@ -393,6 +408,7 @@ const settingsToggle = document.getElementById('settings-toggle');
 const musicBtn = document.getElementById('music-btn');
 const voiceBtn = document.getElementById('voice-btn');
 const shapeVoiceBtn = document.getElementById('shape-voice-btn');
+const autopilotBtn = document.getElementById('autopilot-btn');
 const discoBtn = document.getElementById('disco-button');
 
 const FAMILY_ORDER = [
@@ -1240,6 +1256,8 @@ function toggleSettingsMenu(e) {
         settingsMenu.classList.remove('open');
         settingsToggle.innerHTML = "⚙️";
         settingsToggle.setAttribute('aria-label', 'Open Settings');
+        // Reset autopilot timer when closing settings to prevent immediate activation
+        lastInteractionTime = Date.now();
     }
 }
 
@@ -1290,6 +1308,37 @@ function toggleShapeVoice(e) {
         test.pitch = 1.3;
         window.speechSynthesis.speak(test);
     }
+}
+
+function toggleAutopilot(e) {
+    if(e) e.stopPropagation();
+    isAutopilotEnabled = !isAutopilotEnabled;
+    autopilotBtn.setAttribute('aria-pressed', isAutopilotEnabled);
+    autopilotBtn.querySelector('.status-text').innerText = isAutopilotEnabled ? "ON" : "OFF";
+    if (!isAutopilotEnabled && isAutopilotActive) {
+        deactivateAutopilotMode();
+    }
+    if (isAutopilotEnabled) {
+        lastInteractionTime = Date.now();
+    }
+}
+
+function activateAutopilotMode() {
+    if (isAutopilotActive) return;
+    isAutopilotActive = true;
+    // Set initial random target within screen bounds, avoiding UI elements
+    const leftPadding = CONFIG.screenPadding;
+    const rightPadding = CONFIG.uiRightPadding;
+    const topPadding = CONFIG.uiTopPadding;
+    const bottomPadding = CONFIG.screenPadding;
+    autopilotTargetX = leftPadding + Math.random() * (width - leftPadding - rightPadding);
+    autopilotTargetY = topPadding + Math.random() * (height - topPadding - bottomPadding);
+    nextWaypointTime = Date.now() + CONFIG.autopilotWaypointInterval;
+}
+
+function deactivateAutopilotMode() {
+    isAutopilotActive = false;
+    lastInteractionTime = Date.now();
 }
 
 function activateDiscoMode(e) {
@@ -2032,6 +2081,16 @@ function resize() {
         let ratio = width / oldWidth;
         scenery.forEach(s => s.x *= ratio);
     }
+
+    // Clamp autopilot target to new screen bounds if active
+    if (isAutopilotActive) {
+        const leftPadding = CONFIG.screenPadding;
+        const rightPadding = CONFIG.uiRightPadding;
+        const topPadding = CONFIG.uiTopPadding;
+        const bottomPadding = CONFIG.screenPadding;
+        autopilotTargetX = Math.max(leftPadding, Math.min(autopilotTargetX, width - rightPadding));
+        autopilotTargetY = Math.max(topPadding, Math.min(autopilotTargetY, height - bottomPadding));
+    }
 }
 
 function init() {
@@ -2089,7 +2148,9 @@ function updateChest() {
 }
 
 function updateSharks() {
-    sharks.forEach(shark => shark.update(mouseX, mouseY));
+    const targetX = isAutopilotActive ? autopilotTargetX : mouseX;
+    const targetY = isAutopilotActive ? autopilotTargetY : mouseY;
+    sharks.forEach(shark => shark.update(targetX, targetY));
 }
 
 function updateCreatures() {
@@ -2179,11 +2240,34 @@ function updateFoodCollisions() {
     }
 }
 
+function updateAutopilotMode() {
+    if (!isAutopilotEnabled) return;
+
+    // Check if we should activate autopilot due to inactivity
+    if (!isAutopilotActive) {
+        if (Date.now() - lastInteractionTime >= CONFIG.autopilotInactivityTime) {
+            activateAutopilotMode();
+        }
+    }
+
+    // Update autopilot waypoint if active
+    if (isAutopilotActive && Date.now() >= nextWaypointTime) {
+        const leftPadding = CONFIG.screenPadding;
+        const rightPadding = CONFIG.uiRightPadding;
+        const topPadding = CONFIG.uiTopPadding;
+        const bottomPadding = CONFIG.screenPadding;
+        autopilotTargetX = leftPadding + Math.random() * (width - leftPadding - rightPadding);
+        autopilotTargetY = topPadding + Math.random() * (height - topPadding - bottomPadding);
+        nextWaypointTime = Date.now() + CONFIG.autopilotWaypointInterval;
+    }
+}
+
 function update() {
     if (!isPlaying) return;
     updateBubbles();
     if (isPaused) return;
 
+    updateAutopilotMode();
     updateChest();
     updateSharks();
     updateCreatures();
@@ -2249,6 +2333,8 @@ function handleTap(e) {
     if (!isPlaying) return;
     ensureAudioResumed();
     e.preventDefault();
+    lastInteractionTime = Date.now();
+    if (isAutopilotActive) deactivateAutopilotMode();
     if (e.type === 'touchstart') {
         for (let i = 0; i < e.changedTouches.length; i++) {
             const t = e.changedTouches[i]; checkTap(t.clientX, t.clientY);
@@ -2263,7 +2349,12 @@ window.addEventListener('resize', () => {
     resizeTimeout = setTimeout(resize, 100);
 });
 
-window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+window.addEventListener('mousemove', e => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    lastInteractionTime = Date.now();
+    if (isAutopilotActive) deactivateAutopilotMode();
+});
 
 document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
@@ -2275,12 +2366,20 @@ document.addEventListener("visibilitychange", () => {
     } else {
         isPaused = isSettingsOpen;
         if (isMusicOn && !musicTimer) playNextNote();
+        // Reset autopilot timer and deactivate when returning to page
+        lastInteractionTime = Date.now();
+        if (isAutopilotActive) deactivateAutopilotMode();
     }
 });
 
 const handleTouchMove = (e) => {
     e.preventDefault();
-    if(e.touches.length > 0) { mouseX = e.touches[0].clientX; mouseY = e.touches[0].clientY; }
+    if(e.touches.length > 0) {
+        mouseX = e.touches[0].clientX;
+        mouseY = e.touches[0].clientY;
+        lastInteractionTime = Date.now();
+        if (isAutopilotActive) deactivateAutopilotMode();
+    }
 };
 
 window.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -2295,6 +2394,7 @@ document.getElementById('start-btn').addEventListener('click', () => {
     mouseX = width / 2;
     mouseY = height / 2;
     nextChestTime = Date.now() + 5000;
+    lastInteractionTime = Date.now(); // Reset autopilot timer on game start
     ensureAudioResumed();
 });
 
@@ -2302,6 +2402,7 @@ settingsToggle.addEventListener('click', toggleSettingsMenu);
 musicBtn.addEventListener('click', toggleMusic);
 voiceBtn.addEventListener('click', toggleVoice);
 shapeVoiceBtn.addEventListener('click', toggleShapeVoice);
+autopilotBtn.addEventListener('click', toggleAutopilot);
 
 // DISCO BUTTON EVENT LISTENERS
 discoBtn.addEventListener('click', activateDiscoMode);
@@ -2326,6 +2427,8 @@ document.addEventListener('click', (e) => {
         settingsMenu.classList.remove('open');
         settingsToggle.innerHTML = "⚙️";
         settingsToggle.setAttribute('aria-label', 'Open Settings');
+        // Reset autopilot timer when closing settings
+        lastInteractionTime = Date.now();
     }
 });
 
