@@ -327,7 +327,6 @@ const CONFIG = {
         { name: 'Square', type: 'square' },
         { name: 'Circle', type: 'circle' }
     ],
-    shapeSpawnChance: 0.15, // 15% chance a food spawns as a shape
     shapeMinInterval: 8000, // Minimum time between shape spawns (ms)
     shapeMaxInterval: 15000 // Maximum time between shape spawns (ms)
 };
@@ -364,7 +363,6 @@ let currentMatchingColor = null;
 
 // Shape Recognition State
 let isShapeVoiceOn = true;
-let lastShapeSpawnTime = 0;
 let nextShapeSpawnTime = 0;
 
 // Input & Dimensions
@@ -1845,7 +1843,6 @@ class Food {
             // Schedule next shape spawn
             const interval = CONFIG.shapeMinInterval + Math.random() * (CONFIG.shapeMaxInterval - CONFIG.shapeMinInterval);
             nextShapeSpawnTime = now + interval;
-            lastShapeSpawnTime = now;
         }
 
         // If color matching mode is active, apply the matching color
@@ -2039,6 +2036,10 @@ function resize() {
 
 function init() {
     resize();
+
+    // Initialize shape spawn timer BEFORE creating foods (first shape after 3-8 seconds)
+    nextShapeSpawnTime = Date.now() + 3000 + Math.random() * 5000;
+
     sharks.push(new Shark('baby', CONFIG.colors.baby, null));
     for(let i=0; i<5; i++) foods.push(new Food());
     for(let i=0; i<20; i++) bubbles.push(new Bubble());
@@ -2058,9 +2059,6 @@ function init() {
 
     // Initialize color matching mode timer (first occurrence after 5-10 seconds)
     nextColorMatchingTime = Date.now() + 5000 + Math.random() * 5000;
-
-    // Initialize shape spawn timer (first shape after 3-8 seconds)
-    nextShapeSpawnTime = Date.now() + 3000 + Math.random() * 5000;
 
     loop();
 }
